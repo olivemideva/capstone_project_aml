@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Local data: keep only directory placeholders.
+/data/*
+!/data/raw/
+!/data/processed/
+/data/raw/*
+!/data/raw/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.vscode/
