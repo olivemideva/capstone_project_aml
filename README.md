@@ -35,7 +35,7 @@ Create and activate a Python virtual environment, then install the dependencies 
 development:
 
 ```powershell
-python -m pip install -r requirements-api.txt -r requirements-ui.txt -r requirements-dev.txt -r requirements-data.txt -r requirements-model.txt
+python -m pip install -r requirements-api.txt -r requirements-ui.txt -r requirements-dev.txt -r requirements-data.txt -r requirements-model.txt -r requirements-optimization.txt
 ```
 
 The model dependencies support the tree baselines and SHAP explanations.
@@ -148,6 +148,40 @@ create a new selection. The final test split has not been evaluated. The validat
 seven counties and CV for 10% county-block has only three eligible training counties, so rankings
 are preliminary. Autoencoder candidate artifacts and reports are regenerable and ignored by Git;
 selected artifacts are intended to be tracked. Only load trusted model artifacts.
+
+## Simulated county prioritisation
+
+After cleaning, run:
+
+```powershell
+python -m src.optimization.compare
+```
+
+The default simulation uses the **observed** complete 2019 county profiles, not reconstructed
+data. It selects up to ten counties, with one simulated unit of cost per selected county; there
+is no currency or real allocation implied. The budget, seed, generations and input file can be
+specified with `--budget`, `--seed`, `--generations` and `--input`.
+
+Indicators use the observed age-sex cells: children are ages 0–14, working age 15–64, elderly
+65+, and dependency burden is (children + elderly) / working-age population. Incomplete profiles
+or a zero working-age denominator are rejected. The objectives maximise the selected counties'
+share of all children, share of all elderly people, and share of the sum of county dependency
+ratios. The third objective is an **illustrative burden-based equity proxy**, not a proven
+measure of fairness, need, service delivery or deprivation. All objectives treat selecting a
+county as covering its entire indicated population; this is a simplifying assumption, not a
+service-coverage estimate. Age-cell totals may differ from source aggregate totals.
+
+The weighted-sum baseline solves each of 66 fixed weight combinations exactly for the equal-cost
+budget. Binary NSGA-III approximates a nondominated front; solutions are not guaranteed globally
+Pareto-optimal. Both methods use the same objectives and budget. Their hypervolumes use the same
+fixed `[0.01, 0.01, 0.01]` reference point in minimisation coordinates (objectives are negated).
+The result depends on the weight grid, stochastic search, seed and hypervolume reference point;
+it does not establish real-world superiority. This phase deliberately does not use or evaluate
+the selected reconstruction models.
+
+Generated `indicators.csv`, `tradeoffs.csv`, `summary.json` and an interactive `tradeoffs.html`
+are saved to `reports/prioritisation/` and ignored by Git. County selections are stored as JSON
+arrays of county codes in the table. The decision maker must assess assumptions and trade-offs.
 
 ## Reproduction and deployment
 
