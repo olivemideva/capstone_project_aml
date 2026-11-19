@@ -185,6 +185,47 @@ arrays of county codes in the table. The decision maker must assess assumptions 
 
 ## Reproduction and deployment
 
+### FastAPI service
+
+Install the requirements files listed in Setup. The API requires the selected tree-model files
+under `models/selected/` and the derived observed indicators in
+`models/observed_county_indicators.csv`. Both are included in the repository, so the raw CSV
+is not required to serve predictions. Only load model files from trusted sources; joblib
+deserialization executes code. The current service supports the selected Random Forest or
+XGBoost artifacts, not an autoencoder-selected family. The serialized models were trained
+with scikit-learn 1.9.1, pinned in `requirements-model.txt`; if changing that version, retrain
+and reselect artifacts because scikit-learn does not guarantee cross-version compatibility.
+
+Start the API from the project root:
+
+```powershell
+python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for the interactive request schemas. `/health` confirms that
+startup artifacts loaded, `/counties` lists county identifiers, and `/indicators/{county}`
+returns observed 2019 indicators by county code. `/reconstruct` requires all 42 age-sex keys,
+with `null` for missing values, plus an explicitly selected `pattern` (`random`, `age-block`
+or `county-block`) and `rate` (10, 20 or 40). It preserves observed cells and returns the
+predicted keys separately; predictions are experimental and the selected scenario is not
+automatically inferred or validated against the submitted mask. Input values must be finite and
+between zero and one trillion.
+
+`/prioritise` accepts an equal-cost simulated budget, three objective weights for the
+weighted-sum baseline, a random seed and a generation count (1–200). It returns the weighted
+solution and an approximate NSGA-III front over the *observed* indicators, not reconstructed
+profiles. At most one optimisation runs per API process at a time; a simultaneous request
+receives HTTP 503. These are decision-support simulations, not actual allocations. Indicators
+can be regenerated from a processed dataset matching `models/selected/selection.json` using
+`python -m src.api.export_indicators`.
+
+CORS is disabled unless `AML_CORS_ORIGINS` is set to a comma-separated list of trusted browser
+origins. `AML_MODEL_DIR` and `AML_INDICATORS_PATH` override the default artifact locations.
+`/metrics` exposes Prometheus request counts, errors (including 4xx), request latency and
+successful reconstruction counts. Metrics are in-process and reset on restart; persistent
+history requires an external collector. The API currently has no authentication or public
+rate limiting and should not be treated as a production service.
+
 ### End-to-end pipeline
 
 Place the raw CSV as described above, install the requirement files, then run from the project
