@@ -18,6 +18,17 @@ The supplied extract contains Kenya's 47 admin-1 counties for the 2019 reference
 different extract can be specified with `--input`; it must contain all 47 county codes and one
 reference period. Inspect its source and reference period before comparing results.
 
+Run the standalone loader from the repository root to verify the local file:
+
+```powershell
+python -m src.data.load
+```
+
+For another file, use `python -m src.data.load --input path/to/file.csv`. The loader checks
+required columns and the 47 Kenya admin-level-1 county codes, and logs the file's SHA-256,
+source shape and selected Kenya shape. The cleaner uses the same loader and performs additional
+demographic and reference-period checks.
+
 ## Setup
 
 Create and activate a Python virtual environment, then install the dependencies needed for
