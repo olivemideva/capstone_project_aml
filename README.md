@@ -115,6 +115,40 @@ existing source discrepancies; exact agreement is not assumed. MAE, RMSE and R²
 artificially held-out cells, not every cell in a reconstructed profile. Never load joblib
 artifacts from untrusted sources.
 
+## Masked autoencoder and selection
+
+Install `requirements-model.txt`, then run these commands from the repository root after
+cleaning the data:
+
+```powershell
+python -m src.models.baselines
+python -m src.models.autoencoder
+python -m src.models.compare_models
+```
+
+The autoencoder takes 42 masked age-sex values and 42 observed-value indicators. It predicts
+non-negative age-sex cells, optimising masked-cell error plus a tunable consistency penalty.
+The penalty uses reported age and gender totals **as training labels only**, not as inference
+inputs. Consequently the autoencoder uses extra supervision that the tree baselines do not;
+comparisons reflect that difference. No reported totals from validation or test counties are
+used to predict their held-out cells. Validation consistency metrics compare predictions against
+reported totals afterward, which themselves have documented source inconsistencies.
+
+Hyperparameters are chosen with three-fold county-grouped CV on masked training counties; the
+normalisation scale is fitted separately inside each training fold. The exact Phase 4 masks are
+recreated using the same seed. The comparison rejects mismatched input checksums, seeds or
+validation-mask fingerprints; rerun both training commands if either input or mask logic changes.
+
+Selection chooses the family with the lowest **unweighted mean validation MAE across the nine
+masking scenarios**, not the single easiest scenario. It saves that family's nine scenario-specific
+artifacts, their comparison table and selection metadata to `models/selected/`. A caller must
+select the corresponding pattern and rate; this is not yet a general-purpose deployed model.
+The selection command refuses to overwrite a nonempty output directory; use `--output-dir` to
+create a new selection. The final test split has not been evaluated. The validation set has only
+seven counties and CV for 10% county-block has only three eligible training counties, so rankings
+are preliminary. Autoencoder candidate artifacts and reports are regenerable and ignored by Git;
+selected artifacts are intended to be tracked. Only load trusted model artifacts.
+
 ## Reproduction and deployment
 
 Pipeline, Docker, deployment, architecture, and public service links will be documented as
