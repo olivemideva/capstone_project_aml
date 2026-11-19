@@ -19,6 +19,7 @@ from src.features.audit import audit_masked_inputs, audit_splits
 from src.features.engineer import ATOMIC_COLUMNS, engineer_features
 from src.features.masking import PATTERNS, RATES, simulate_mask
 from src.features.split import split_counties
+from src.models.evaluation import mask_fingerprint
 from src.models.metrics import consistency_metrics, reconstruction_metrics
 
 matplotlib.use("Agg")
@@ -127,6 +128,9 @@ def run_baselines(
                     "split": "validation",
                     "train_counties_with_targets": len(np.unique(train_groups)),
                     "train_targets": len(train_y), "validation_targets": len(validation_y),
+                    "mask_sha256": mask_fingerprint(
+                        splits["validation"]["admin1_code"], data["validation"][1]
+                    ),
                     "cv_mae": -search.best_score_, "best_params": json.dumps(search.best_params_),
                     **reconstruction_metrics(validation_y, predictions),
                     **consistency_metrics(reconstructed),
