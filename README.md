@@ -6,7 +6,7 @@ FastAPI, a purple-themed Streamlit interface with light and dark modes, and Dock
 
 ## Status
 
-The local data cleaning and exploratory analysis scripts are implemented. The models, API,
+The local data pipeline and tree-model baselines are implemented. The final model, API,
 interface, containers, and deployment have not yet been implemented.
 
 ## Data
@@ -35,10 +35,10 @@ Create and activate a Python virtual environment, then install the dependencies 
 development:
 
 ```powershell
-python -m pip install -r requirements-api.txt -r requirements-ui.txt -r requirements-dev.txt -r requirements-data.txt
+python -m pip install -r requirements-api.txt -r requirements-ui.txt -r requirements-dev.txt -r requirements-data.txt -r requirements-model.txt
 ```
 
-Additional modelling dependencies will be added when those components are implemented.
+The model dependencies support the tree baselines and SHAP explanations.
 
 ## Cleaning and exploratory analysis
 
@@ -95,6 +95,25 @@ masking; incomplete components or zero denominators yield missing features. The 
 split isolation, masking, target separation and feature recomputation. It does not prove that
 future model training is leakage-free: fit imputers, scalers and tuning only on training data,
 and keep test data untouched until final evaluation.
+
+## Tree baselines
+
+After cleaning, run `python -m src.models.baselines`. Random Forest and XGBoost are tuned
+independently for each masking pattern and rate using three-fold county-grouped CV on the
+training split. Each training example predicts one masked age/sex cell from the remaining
+masked profile and the target age/sex; missing inputs use a fixed -1 sentinel (populations are
+non-negative). County identifiers, source totals and held-out values are not predictors. CV
+uses only counties that actually have masked targets: at 10% county-block masking this means
+only three training counties, so those results are particularly uncertain.
+
+The script writes 18 model artifacts to `models/baselines/`, a validation results table and
+training-sample SHAP plots to `reports/baselines/`, and input checksum/seed metadata in
+`run.json`. These generated outputs are ignored by Git and can be recreated locally. The test
+split is not evaluated here and must remain untouched until the final model is selected.
+Consistency compares completed atomic cells against the original reported totals, including
+existing source discrepancies; exact agreement is not assumed. MAE, RMSE and R² cover only
+artificially held-out cells, not every cell in a reconstructed profile. Never load joblib
+artifacts from untrusted sources.
 
 ## Reproduction and deployment
 
