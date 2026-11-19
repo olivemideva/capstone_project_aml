@@ -185,5 +185,29 @@ arrays of county codes in the table. The decision maker must assess assumptions 
 
 ## Reproduction and deployment
 
-Pipeline, Docker, deployment, architecture, and public service links will be documented as
-those components are completed.
+### End-to-end pipeline
+
+Place the raw CSV as described above, install the requirement files, then run from the project
+root:
+
+```powershell
+python run_pipeline.py
+```
+
+`config.yaml` sets the input, output root, fixed seed, simulated budget and optimisation
+generations. Each invocation creates a new timestamped directory under
+`data/processed/pipeline-runs/`; use `--run-name NAME` for a specific new directory or
+`--config PATH` for another configuration. Existing run directories are never overwritten.
+Changing the input or output paths to absolute paths is supported.
+
+The pipeline loads and cleans the data, records the consistency report, prepares masks, trains
+both model families, selects using validation results, and optimises **observed** profiles. It
+logs a warning and continues when source totals are inconsistent or incomplete; the standalone
+`src.data.validate` command remains strict. Check `reports/consistency_checks.csv` inside the
+run directory. The manifest is written only on successful completion and records hashes, seed,
+configuration, and check counts. Failed runs may leave partial files without a manifest; choose
+a new run name for a retry. The pipeline does not overwrite the previously committed
+`models/selected/` artifacts, and it does not evaluate the held-out test split.
+
+Docker, deployment, architecture, and public service links will be documented as those
+components are completed.
