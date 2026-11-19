@@ -63,6 +63,39 @@ components do not add up. Checks with missing components are labelled incomplete
 consistent. Missingness reports and interactive HTML figures are written to `reports/`. These
 generated files and the processed dataset are ignored by Git and can be recreated locally.
 
+## Features, splits and masking
+
+After cleaning, run:
+
+```powershell
+python -m src.features.prepare
+```
+
+This writes nine experiments (three patterns and rates) for each county-grouped
+train/validation/test split under `data/processed/experiments/`. The default seed is 42;
+`--seed`, `--input`, and `--output-dir` can be used to change the defaults. With 47 counties,
+the split has 33 training, 7 validation and 7 test counties. Each experiment writes separate
+`inputs.csv`, `mask.csv` and `targets.csv` files, plus a shared `summary.json` recording the
+requested rates and actual masked cell fractions. Targets are for scoring only, never predictors.
+Do not combine differently masked versions of the same county across splits or experiments.
+
+Random masking selects 10%, 20% or 40% of observed cells. Age-block masking selects that
+percentage of available county-age blocks, hiding both available sex cells; county-block
+masking selects that percentage of counties and hides all available age-sex cells in each.
+Counts are rounded to the nearest whole unit, so actual cell fractions can differ, particularly
+in the small validation and test splits. County-block cases have no observed demographic
+inputs: reconstruction needs justified external information or an explicit baseline.
+
+Features use only the 42 five-year/open-ended age-by-sex cells, not the source aggregate
+totals, to avoid direct leakage through redundant totals. The denominator for shares is the sum
+of these 42 cells, which can differ from a reported source total. County names and codes in the
+output are identifiers for joining and auditing, not demographic model predictors. Male/female sex ratio, child
+(0–14), working-age (15–64) and older (65+) shares, and dependency ratio are computed *after*
+masking; incomplete components or zero denominators yield missing features. The audit checks
+split isolation, masking, target separation and feature recomputation. It does not prove that
+future model training is leakage-free: fit imputers, scalers and tuning only on training data,
+and keep test data untouched until final evaluation.
+
 ## Reproduction and deployment
 
 Pipeline, Docker, deployment, architecture, and public service links will be documented as
