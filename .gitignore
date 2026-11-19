@@ -23,6 +23,8 @@ __pycache__/
 /reports/county_missingness.html
 /reports/baselines/
 /models/baselines/
+/models/autoencoders/
+/reports/autoencoders/
 
 # Local environment and editor files
 .env
