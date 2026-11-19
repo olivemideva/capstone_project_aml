@@ -1,19 +1,16 @@
 """Clean a local HDX HAPI population extract into Kenya county profiles."""
 
 import argparse
+import logging
 from pathlib import Path
 
 import pandas as pd
 
-RAW_PATH = Path("data/raw/hdx_hapi_population_global_non_hrp.csv")
+from src.data.load import COUNTY_CODES, RAW_PATH, REQUIRED_COLUMNS, load_kenya
+
 PROCESSED_PATH = Path("data/processed/kenya_county_population.csv")
-REQUIRED_COLUMNS = [
-    "location_code", "admin_level", "admin1_code", "admin1_name", "gender",
-    "age_range", "population", "reference_period_start", "reference_period_end",
-]
 AGE_RANGES = [f"{age}-{age + 4}" for age in range(0, 100, 5)] + ["100+", "all"]
 GENDERS = ["f", "m", "all"]
-COUNTY_CODES = {f"KE{i:03}" for i in range(1, 48)}
 
 
 def population_column(gender: str, age: str) -> str:
@@ -24,24 +21,6 @@ def population_column(gender: str, age: str) -> str:
 POPULATION_COLUMNS = [
     population_column(gender, age) for gender in GENDERS for age in AGE_RANGES
 ]
-
-
-def load_kenya(path: Path) -> pd.DataFrame:
-    """Select Kenya admin-1 rows from a potentially large global file."""
-    if not path.is_file():
-        raise FileNotFoundError(f"Population CSV not found: {path}")
-    try:
-        chunks = pd.read_csv(path, usecols=REQUIRED_COLUMNS, dtype=str, chunksize=100_000)
-        frames = [
-            chunk.loc[
-                (chunk["location_code"].str.strip().str.upper() == "KEN")
-                & (chunk["admin_level"].str.strip() == "1")
-            ]
-            for chunk in chunks
-        ]
-    except ValueError as exc:
-        raise ValueError(f"Cannot read required columns from {path}: {exc}") from exc
-    return pd.concat(frames, ignore_index=True)
 
 
 def clean_population(rows: pd.DataFrame) -> pd.DataFrame:
@@ -105,6 +84,7 @@ def clean_population(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=RAW_PATH)
     parser.add_argument("--output", type=Path, default=PROCESSED_PATH)
