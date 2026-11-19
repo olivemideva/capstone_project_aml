@@ -21,6 +21,8 @@ __pycache__/
 /reports/missingness_by_column.csv
 /reports/county_population.html
 /reports/county_missingness.html
+/reports/baselines/
+/models/baselines/
 
 # Local environment and editor files
 .env
