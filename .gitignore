@@ -25,6 +25,7 @@ __pycache__/
 /models/baselines/
 /models/autoencoders/
 /reports/autoencoders/
+/reports/prioritisation/
 
 # Local environment and editor files
 .env
