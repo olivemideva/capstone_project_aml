@@ -73,6 +73,24 @@ def test_palette_text_contrast():
             assert (max(a, b) + 0.05) / (min(a, b) + 0.05) >= 4.5
 
 
+@pytest.mark.parametrize("mode", ["light", "dark"])
+def test_dropdown_css_styles_unfocused_and_focused_options(monkeypatch, mode):
+    from app import theme
+
+    captured = []
+    monkeypatch.setattr(theme, "palette", lambda: theme.PALETTES[mode])
+    monkeypatch.setattr(theme.st, "markdown", lambda value, **kwargs: captured.append(value))
+    theme.css()
+    css = captured[0]
+    assert f'--ui-text: {theme.PALETTES[mode]["text"]};' in css
+    for dropdown in ("stSelectboxVirtualDropdown", "stMultiSelectVirtualDropdown"):
+        assert f'[data-testid="{dropdown}"] [role="option"]' in css
+        assert f'[data-testid="{dropdown}"] [role="option"]:hover' in css
+        assert f'[data-testid="{dropdown}"] [role="option"][data-focused="true"]' in css
+    assert "background: var(--ui-surface);\n            color: var(--ui-text);" in css
+    assert "background: var(--ui-surface-alt);\n            color: var(--ui-text);" in css
+
+
 def test_csv_reconstruction_preserves_known_values_and_extra_columns(monkeypatch):
     calls = []
     def reconstruct(payload):
