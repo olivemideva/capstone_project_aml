@@ -7,8 +7,16 @@ interface with light and dark modes, and Docker.
 ## Status
 
 The local data pipeline, model selection, FastAPI service, Streamlit interface and local Docker
-monitoring stack are implemented. GitHub Actions CI/CD and the Render Blueprint are configured;
-deployment requires the Render services and GitHub secrets described below.
+monitoring stack are implemented. The API and UI are deployed on Render; the latest local
+changes are not necessarily deployed until they have been committed and deployed.
+
+- Public application: https://aml-capstone-ui.onrender.com/
+- Public API documentation: https://aml-capstone-api-98go.onrender.com/docs
+- API health: https://aml-capstone-api-98go.onrender.com/health
+
+The public services can sleep on Render's free tier and may take time to wake. The local
+Prometheus and Grafana stack is not deployed by the Render Blueprint. A public monitoring
+status page has not yet been confirmed.
 
 ## Architecture
 
@@ -318,14 +326,20 @@ streamlit run app/streamlit_app.py
 The interface reads the API base URL from `AML_API_URL` and defaults to
 `http://127.0.0.1:8000` if unset. It includes four pages:
 
-- **Reconstruct**: submit a full 42-key age-sex profile with selected `null` values and run
-  scenario-specific reconstruction.
-- **Indicators**: inspect county indicator charts and optionally upload a licensed Kenya county
-  GeoJSON for choropleth rendering. The UI validates county-code matches between API data and
-  uploaded GeoJSON.
-- **Pareto Explorer**: run weighted-sum and NSGA-III simulated prioritisation from form inputs.
-- **Monitoring**: sample `/health` and `/metrics`, chart session-level metric history, and
-  generate an on-demand Evidently drift report from user-uploaded reference/current CSV files.
+The interface initially follows the browser/device light or dark preference. The sun/moon
+button at the top overrides that choice for the current Streamlit session; open a new session
+to follow the device setting again.
+
+- **Fill missing numbers**: upload a processed CSV with one county per row and estimate
+  missing age-sex values. Download the blank template on the page to see the required 42
+  population column names. Leave missing cells empty (or use `NA` or `null`); zero is a
+  known value. Up to 100 rows and 5 MB are accepted per upload. Other columns are retained,
+  but aggregate totals are not recalculated and must be checked separately. Only the 42
+  age-sex values are sent to the configured API, one incomplete row at a time.
+- **Explore counties**: compare county figures and optionally upload licensed county boundaries
+  for a map. The UI checks county codes against the API data.
+- **Compare plans**: explore simulated county selections with different priorities.
+- **Service status**: check service health, chart activity and compare two uploaded datasets.
 
 Monitoring history is only stored in Streamlit session state and resets when the app restarts
 or the browser session is cleared. The drift report is generated locally from uploaded files and
@@ -336,7 +350,7 @@ is not an automated production drift monitor.
 Install Docker Desktop with the Compose plugin, then run from the project root:
 
 ```powershell
-docker compose up --build -d
+docker compose up --build -d --wait
 ```
 
 The Compose stack builds the API and Streamlit UI as slim, non-root images and starts Prometheus
@@ -344,23 +358,28 @@ and Grafana. Build contexts exclude the local `data/` directory; the API image i
 tracked selected model artifacts and observed indicator file it needs. All host ports bind to
 localhost:
 
-The `-d` flag runs the services in the background and returns you to the terminal. The
-frontend is at `http://127.0.0.1:8501` and the API documentation is at
-`http://127.0.0.1:8000/docs`; the UI connects to the API inside the Compose network.
+The `-d` flag runs the services in the background and returns you to the terminal; `--wait`
+waits for the services to start or become healthy. Compose starts Streamlit automatically;
+there is no separate Streamlit command when using Docker. The frontend is at
+`http://127.0.0.1:18501` and the API documentation is at `http://127.0.0.1:18000/docs`.
+The UI connects to the API inside the Compose network. Reload the frontend if it was open
+while the containers were restarting.
 
 The API image installs the runtime needed by the currently selected Random Forest models. If
 `models/selected/selection.json` selects XGBoost instead, set `AML_INSTALL_XGBOOST=true` in the
 environment before building (for PowerShell, use `$env:AML_INSTALL_XGBOOST = "true"`). The
 optional XGBoost runtime is defined in `requirements-api-xgboost.txt`.
 
-- UI: `http://127.0.0.1:8501`
-- API health: `http://127.0.0.1:8000/health`
-- API metrics: `http://127.0.0.1:8000/metrics`
-- Prometheus: `http://127.0.0.1:9090`
-- Grafana: `http://127.0.0.1:3000` (local-development default credentials: `admin` / `admin`)
+- UI: `http://127.0.0.1:18501`
+- API health: `http://127.0.0.1:18000/health`
+- API metrics: `http://127.0.0.1:18000/metrics`
+- Prometheus: `http://127.0.0.1:19090`
+- Grafana: `http://127.0.0.1:13000` (local-development default credentials: `admin` / `admin`)
 
 If one of these host ports is already in use, override its `*_HOST_PORT` variable when starting
 Compose: `API_HOST_PORT`, `UI_HOST_PORT`, `PROMETHEUS_HOST_PORT`, or `GRAFANA_HOST_PORT`.
+For example, in Git Bash use `GRAFANA_HOST_PORT=13001 docker compose up --build -d --wait`
+and open Grafana on port 13001. No fixed port can be guaranteed free on every machine.
 Prometheus scrapes the API every 15 seconds. Grafana provisions a Prometheus datasource and an
 API overview dashboard with request/error/prediction totals, request rates and latency. Named
 volumes retain Prometheus and Grafana state between container restarts. Stop the services with
@@ -438,5 +457,5 @@ configuration, and check counts. Failed runs may leave partial files without a m
 a new run name for a retry. The pipeline does not overwrite the previously committed
 `models/selected/` artifacts, and it does not evaluate the held-out test split.
 
-Public service URLs are available only after the Render services have been configured and
-deployed; the localhost addresses above are not publicly accessible.
+The localhost addresses above are not publicly accessible. Use the public links in the status
+section to access the deployed services.
