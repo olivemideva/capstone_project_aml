@@ -1,14 +1,48 @@
 # Kenyan demographic reconstruction and county prioritisation
 
-This capstone will explore reconstructing incomplete county-level demographic profiles and
-using them to compare simulated prioritisation strategies. The application is planned to use
-FastAPI, a purple-themed Streamlit interface with light and dark modes, and Docker.
+This capstone explores reconstructing incomplete county-level demographic profiles and
+comparing simulated prioritisation strategies. It uses FastAPI, a purple-themed Streamlit
+interface with light and dark modes, and Docker.
 
 ## Status
 
 The local data pipeline, model selection, FastAPI service, Streamlit interface and local Docker
 monitoring stack are implemented. GitHub Actions CI/CD and the Render Blueprint are configured;
 deployment requires the Render services and GitHub secrets described below.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    raw["Local HDX population CSV"] --> pipeline["Load, clean and validate"]
+    pipeline --> features["County splits and simulated masks"]
+    features --> train["Train and compare models"]
+    train --> runs["Run reports and selected artifacts"]
+    pipeline --> optimisation["Prioritisation on observed profiles"]
+    optimisation --> reports["Simulated trade-off reports"]
+    artifacts["Tracked selected models and observed indicators"] --> api["FastAPI"]
+    browser["Browser"] --> ui["Streamlit UI"]
+    ui --> api
+    api --> monitoring["Prometheus"]
+    monitoring --> grafana["Grafana"]
+```
+
+Training writes isolated run artifacts; it does not automatically replace the tracked models
+used by the API. Local Compose connects the UI to the API and runs Prometheus and Grafana.
+The Render Blueprint configures only the API and UI; it does not deploy the monitoring stack.
+
+## Submission files
+
+- Project documentation and reproduction instructions: this README.
+- AI assistance disclosure: [AI_USE.md](AI_USE.md).
+- Reproducible data and training pipeline: [run_pipeline.py](run_pipeline.py),
+  [config.yaml](config.yaml), and the modules under [src/](src/).
+- Model training and selected artifacts: [src/models/](src/models/) and
+  [models/selected/](models/selected/); the current selected family is random forest.
+- Container configuration: [Dockerfile.api](Dockerfile.api), [Dockerfile.ui](Dockerfile.ui)
+  and [docker-compose.yml](docker-compose.yml).
+- API implementation: [src/api/](src/api/).
+- Exploratory analysis and results: [notebooks/capstone_analysis.ipynb](notebooks/capstone_analysis.ipynb).
 
 ## Data
 
@@ -32,14 +66,60 @@ demographic and reference-period checks.
 
 ## Setup
 
-Create and activate a Python virtual environment, then install the dependencies needed for
-development:
+Use Python 3.11, create and activate a virtual environment, then install the dependencies
+needed for development. From PowerShell in the repository root:
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-api.txt -r requirements-ui.txt -r requirements-dev.txt -r requirements-data.txt -r requirements-model.txt -r requirements-optimization.txt
 ```
 
 The model dependencies support the tree baselines and SHAP explanations.
+In Git Bash, activate with `source .venv/Scripts/activate` instead.
+
+## Reproducible analysis notebook
+
+Open `notebooks/capstone_analysis.ipynb` in VS Code using the project virtual environment, or
+run `python -m jupyter lab` from the repository root. Install the Setup requirements first.
+The notebook loads the local raw CSV, explores and checks it, and calls the same pipeline used
+by `python run_pipeline.py`. A full run trains all candidates and may take substantial CPU time;
+it creates a new, isolated output directory under `data/processed/pipeline-runs/` and does not
+replace the artifacts used by the API. Review the saved selection before changing deployed models.
+
+The notebook includes data distributions, missingness and source inconsistencies, all nine
+masking scenarios, validation results, grouped cross-validation, a training-median reference
+baseline, and the observed-profile optimisation. It also examines mean under- and
+overestimation and illustrative asymmetric losses: one or two arbitrary cost units per person
+under- or overestimated. These are sensitivity assumptions, not measured financial costs.
+MAE, RMSE, bias and losses are per artificially masked cell; R² can be undefined for constant
+targets. The MAE-selected model is not necessarily optimal for an asymmetric cost.
+
+To reuse a complete run in PowerShell, set `AML_NOTEBOOK_RUN_DIR` to its absolute path before
+starting Jupyter. Its configuration, raw and processed checksums must match; these checks do
+not verify the code revision or dependency versions used to produce the original run. By default
+the test counties remain reserved. After freezing the methodology and selection, explicitly set
+`AML_EVALUATE_TEST=1` before launching Jupyter to calculate and save the final held-out
+report. The original manifest describes the pipeline run and remains unchanged; the presence of
+`reports/selected_test_diagnostics.csv` records the separate test evaluation. Do not tune the
+model repeatedly against this report. For the equivalent standalone step:
+
+```powershell
+python -m src.models.diagnostics --input "data\processed\pipeline-runs\YOUR_RUN\data\kenya_county_population.csv" --model-dir "data\processed\pipeline-runs\YOUR_RUN\models\selected" --output "data\processed\pipeline-runs\YOUR_RUN\reports\selected_test_diagnostics.csv" --split test
+```
+
+Replace `YOUR_RUN` with the actual run directory name. The command refuses to overwrite an
+existing report. The notebook's tables and charts can also be generated without Jupyter:
+
+```powershell
+python -m src.analysis_workflow --run-dir "data\processed\pipeline-runs\YOUR_RUN" --output-dir "data\processed\pipeline-runs\YOUR_RUN\reports\analysis-export"
+```
+
+The output directory must not already exist. Small county samples, simulated masks, source
+inconsistencies and potential distribution shift mean that neither high scores nor grouped CV
+can guarantee good future performance or the absence of overfitting. A negative R² indicates
+performance worse than predicting the evaluation sample's mean; the separate median reference
+uses only training counties.
 
 ## Cleaning and exploratory analysis
 
@@ -256,13 +336,17 @@ is not an automated production drift monitor.
 Install Docker Desktop with the Compose plugin, then run from the project root:
 
 ```powershell
-docker compose up --build
+docker compose up --build -d
 ```
 
 The Compose stack builds the API and Streamlit UI as slim, non-root images and starts Prometheus
 and Grafana. Build contexts exclude the local `data/` directory; the API image includes only the
 tracked selected model artifacts and observed indicator file it needs. All host ports bind to
 localhost:
+
+The `-d` flag runs the services in the background and returns you to the terminal. The
+frontend is at `http://127.0.0.1:8501` and the API documentation is at
+`http://127.0.0.1:8000/docs`; the UI connects to the API inside the Compose network.
 
 The API image installs the runtime needed by the currently selected Random Forest models. If
 `models/selected/selection.json` selects XGBoost instead, set `AML_INSTALL_XGBOOST=true` in the
@@ -354,5 +438,5 @@ configuration, and check counts. Failed runs may leave partial files without a m
 a new run name for a retry. The pipeline does not overwrite the previously committed
 `models/selected/` artifacts, and it does not evaluate the held-out test split.
 
-Docker, deployment, architecture, and public service links will be documented as those
-components are completed.
+Public service URLs are available only after the Render services have been configured and
+deployed; the localhost addresses above are not publicly accessible.

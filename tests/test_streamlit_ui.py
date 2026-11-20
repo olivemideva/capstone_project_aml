@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -5,6 +6,30 @@ import pytest
 from app import api_client
 from app.metrics_parser import parse_snapshot
 from app.pages.indicators import _extract_values
+
+
+def test_streamlit_entry_point_renders_without_exceptions():
+    from streamlit.testing.v1 import AppTest
+
+    script = Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py"
+    app = AppTest.from_file(script).run(timeout=30)
+    assert not app.exception
+
+
+def test_streamlit_switches_between_light_and_dark_modes():
+    from streamlit.testing.v1 import AppTest
+
+    script = Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py"
+    app = AppTest.from_file(script).run(timeout=30)
+    assert app.session_state["theme_mode"] == "light"
+    app.toggle[0].set_value(True).run(timeout=30)
+    assert not app.exception
+    assert app.session_state["theme_mode"] == "dark"
+    assert any("--ui-background: #130C22" in item.value for item in app.markdown)
+    app.toggle[0].set_value(False).run(timeout=30)
+    assert not app.exception
+    assert app.session_state["theme_mode"] == "light"
+    assert any("--ui-background: #FAF9FF" in item.value for item in app.markdown)
 
 
 def test_base_url_adds_http_for_render_private_hostport(monkeypatch):

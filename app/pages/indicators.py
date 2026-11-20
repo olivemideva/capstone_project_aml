@@ -36,8 +36,9 @@ def _extract_values(features: Iterable[dict], key_path: str) -> set[str]:
 
 
 def render(colors: dict) -> None:
-    st.title("Observed county indicators")
-    st.caption("Upload licensed county GeoJSON to activate the map overlay.")
+    st.title("Explore county indicators")
+    st.markdown("Compare observed population and dependency measures across Kenya's counties.")
+    st.caption("Based on observed 2019 data, not reconstructed predictions.")
     if st.button("Refresh API indicator cache", use_container_width=True):
         fetch_indicator_table.clear()
     try:
@@ -61,6 +62,8 @@ def render(colors: dict) -> None:
     plotly_layout(chart)
     st.plotly_chart(chart, use_container_width=True)
 
+    st.subheader("Map the results")
+    st.caption("Upload licensed county GeoJSON to activate the optional map overlay.")
     uploaded = st.file_uploader("County GeoJSON", type=["json", "geojson"])
     if uploaded is not None:
         key_path = st.text_input(

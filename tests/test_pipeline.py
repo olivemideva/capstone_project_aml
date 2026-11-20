@@ -53,8 +53,9 @@ def test_pipeline_orchestrates_and_keeps_source_warnings(tmp_path, monkeypatch, 
     output = tmp_path / "runs" / "first"
     run_pipeline.run_pipeline(config(), config_path, output)
     assert [name for name, _ in calls] == [
-        "src.features.prepare", "src.models.baselines", "src.models.autoencoder",
-        "src.models.compare_models", "src.optimization.compare",
+        "src.data.analysis", "src.features.prepare", "src.models.baselines",
+        "src.models.autoencoder", "src.models.compare_models", "src.models.diagnostics",
+        "src.optimization.compare",
     ]
     assert "1 inconsistent and 1 incomplete" in caplog.text
     manifest = pd.read_json(output / "manifest.json", typ="series")

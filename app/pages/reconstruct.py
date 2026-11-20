@@ -42,12 +42,26 @@ def _collect_population() -> dict[str, float | None]:
 
 
 def render(colors: dict) -> None:
-    st.title("Reconstruct masked age-sex values")
-    st.caption("Predictions are experimental and should not be treated as official county totals.")
-    population = _collect_population()
+    st.title("Reconstruct a county profile")
+    st.markdown(
+        "Fill gaps in an age and sex population profile using a scenario-specific model."
+    )
+    st.caption(
+        "Experimental estimates are not official county totals. "
+        "The initial values are examples, not real county observations."
+    )
+    st.subheader("Choose a missing-data scenario")
     scenario_left, scenario_right = st.columns(2)
-    pattern = scenario_left.selectbox("Mask pattern", ["random", "age-block", "county-block"])
-    rate = scenario_right.selectbox("Mask rate (%)", [10, 20, 40], index=1)
+    pattern = scenario_left.selectbox(
+        "Mask pattern", ["random", "age-block", "county-block"],
+        help="Choose the missingness pattern used when training the scenario model.",
+    )
+    rate = scenario_right.selectbox(
+        "Mask rate (%)", [10, 20, 40], index=1,
+        help="Select the training scenario closest to the missingness you want to explore.",
+    )
+    with st.expander("Edit population values and missing fields"):
+        population = _collect_population()
     if st.button("Run reconstruction", type="primary", use_container_width=True):
         try:
             result = api_client.reconstruct(

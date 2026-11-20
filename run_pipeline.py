@@ -85,6 +85,7 @@ def run_pipeline(config: dict, config_path: Path, run_dir: Path) -> None:
             "Source totals: %d inconsistent and %d incomplete checks; see %s",
             inconsistent, incomplete, reports / "consistency_checks.csv",
         )
+    command("src.data.analysis", "--input", processed, "--output-dir", reports / "exploration")
     command(
         "src.features.prepare", "--input", processed, "--output-dir", data / "experiments",
         "--seed", seed,
@@ -100,6 +101,10 @@ def run_pipeline(config: dict, config_path: Path, run_dir: Path) -> None:
         "src.models.compare_models", "--baseline-report", reports / "baselines",
         "--autoencoder-report", reports / "autoencoders", "--model-root", models,
         "--output-dir", models / "selected",
+    )
+    command(
+        "src.models.diagnostics", "--input", processed, "--model-dir", models / "selected",
+        "--output", reports / "selected_validation_diagnostics.csv",
     )
     command(
         "src.optimization.compare", "--input", processed, "--output-dir",

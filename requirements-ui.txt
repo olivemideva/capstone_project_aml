@@ -2,3 +2,4 @@ streamlit
 requests
 plotly>=5.24,<6
 evidently>=0.7.23,<0.8
+prometheus-client>=0.20,<1
