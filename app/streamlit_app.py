@@ -6,7 +6,9 @@ from app import api_client
 from app.pages import indicators, monitoring, pareto_explorer, reconstruct
 from app.theme import css, palette, toggle
 
-st.set_page_config(page_title="Kenya Demographic Decision Support", page_icon="🟣", layout="wide")
+st.set_page_config(
+    page_title="Kenya Demographic Decision Support", page_icon="app/assets/icon.svg", layout="wide"
+)
 toggle()
 css()
 colors = palette()
