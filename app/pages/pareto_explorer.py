@@ -11,8 +11,12 @@ from app.theme import plotly_layout
 
 
 def render(colors: dict) -> None:
-    st.title("Pareto Explorer")
-    st.caption("Outputs are simulated equal-cost county selections, not actual budget allocations.")
+    st.title("Explore planning trade-offs")
+    st.markdown("Compare how county selections balance children, older people and dependency.")
+    st.caption(
+        "Outputs are simulated equal-cost county selections, not actual budget allocations. "
+        "Dependency is an illustrative proxy, not a validated measure of fairness."
+    )
     budget_col, child_col, elderly_col, dep_col = st.columns(4)
     payload = {
         "budget": int(budget_col.number_input("Budget", min_value=1, max_value=47, value=10)),

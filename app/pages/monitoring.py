@@ -91,7 +91,8 @@ def _render_drift_report() -> None:
 
 
 def render(colors: dict) -> None:
-    st.title("Monitoring")
+    st.title("Monitor the API")
+    st.markdown("Check service health and explore request and prediction metrics.")
     st.caption("Metrics are sampled from /metrics and kept only in this Streamlit session.")
     left, right = st.columns(2)
     try:
