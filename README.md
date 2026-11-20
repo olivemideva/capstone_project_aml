@@ -7,7 +7,8 @@ FastAPI, a purple-themed Streamlit interface with light and dark modes, and Dock
 ## Status
 
 The local data pipeline, model selection, FastAPI service, Streamlit interface and local Docker
-monitoring stack are implemented. CI/CD deployment and public service links are still pending.
+monitoring stack are implemented. GitHub Actions CI/CD and the Render Blueprint are configured;
+deployment requires the Render services and GitHub secrets described below.
 
 ## Data
 
@@ -283,6 +284,51 @@ volumes retain Prometheus and Grafana state between container restarts. Stop the
 For non-local exposure, set a unique `GRAFANA_ADMIN_PASSWORD` and configure appropriate network
 access and authentication first. This stack is for local development and does not make the API
 production-secure.
+
+### GitHub Actions and Render deployment
+
+The CI workflow runs Ruff, the full test suite and Docker builds on every pull request. On pushes
+to `main`, the deployment workflow reruns lint and tests, builds the API and UI images, publishes
+SHA-specific and `main` tags to GHCR, and deploys the SHA-specific images through Render deploy
+hooks. It waits for the API `/health` endpoint, verifies `/counties` and `/metrics`, then waits
+for the Streamlit health endpoint and checks the public UI page. Any failed check fails the
+workflow.
+
+To configure deployment:
+
+1. Merge this phase to `main`. The first workflow run publishes the SHA and `main` GHCR image
+   tags; its Render deploy step will fail until the Render hooks and live URLs below are
+   configured.
+2. Make both GHCR packages public so Render can pull them without registry credentials. If you
+   keep either package private, add a GHCR credential with `read:packages` access under Render
+   Workspace Settings, then reference it in both image entries in `render.yaml`:
+   ```yaml
+   creds:
+     fromRegistryCreds:
+       name: capstone-ghcr
+   ```
+   Replace `capstone-ghcr` with the credential name configured in Render.
+3. Connect this repository to Render and create/sync a Blueprint from `render.yaml`. It defines
+   the API and UI as free Frankfurt web services using the published GHCR images.
+4. In each Render service's **Settings**, create a deploy hook. Add the following repository
+   **Actions secrets** under GitHub **Settings → Secrets and variables → Actions**:
+   - `RENDER_API_DEPLOY_HOOK_URL`
+   - `RENDER_UI_DEPLOY_HOOK_URL`
+   - `LIVE_API_URL` — the API service base URL, e.g. `https://aml-capstone-api.onrender.com`
+   - `LIVE_UI_URL` — the UI service base URL, e.g. `https://aml-capstone-ui.onrender.com`
+5. Confirm the UI's `AML_API_URL` is set from the API service's private `hostport` by the
+   Blueprint. The Streamlit client uses HTTP for that scheme-less inter-service address. Use the
+   `https://` public service URL for `LIVE_API_URL`.
+6. In GitHub Actions, manually run the **Deploy** workflow on `main` to perform the first
+   configured deployment. Later pushes to `main` deploy automatically. The workflow requires
+   the secrets above and successful lint/tests before publishing or deploying.
+
+Render deploy hooks are credentials: never commit their URLs or paste them into workflow logs.
+The workflow polls for up to 15 minutes per service; free Render services may sleep after
+inactivity and take time to start. Confirm current free-tier quotas before deployment. This
+Blueprint deploys the API and UI only; Prometheus/Grafana remain part of the local Docker Compose
+stack. Public GHCR images and the API endpoints contain no authentication, so do not use this
+deployment for sensitive or production workloads.
 
 ### End-to-end pipeline
 
