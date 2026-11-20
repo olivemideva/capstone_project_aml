@@ -6,6 +6,8 @@ from urllib.parse import urlsplit
 
 import requests
 
+API_READ_TIMEOUT = 90.0
+
 
 @lru_cache(maxsize=1)
 def base_url() -> str:
@@ -37,19 +39,19 @@ def request(method: str, path: str, payload=None, timeout: float = 30.0):
 
 
 def health():
-    return request("GET", "/health", timeout=10)
+    return request("GET", "/health", timeout=API_READ_TIMEOUT)
 
 
 def counties():
-    return request("GET", "/counties", timeout=10)
+    return request("GET", "/counties", timeout=API_READ_TIMEOUT)
 
 
 def indicators(code: str):
-    return request("GET", f"/indicators/{code}", timeout=10)
+    return request("GET", f"/indicators/{code}", timeout=API_READ_TIMEOUT)
 
 
 def reconstruct(payload: dict):
-    return request("POST", "/reconstruct", payload=payload, timeout=30)
+    return request("POST", "/reconstruct", payload=payload, timeout=API_READ_TIMEOUT)
 
 
 def prioritise(payload: dict):
@@ -58,7 +60,7 @@ def prioritise(payload: dict):
 
 def metrics_raw():
     try:
-        response = requests.get(f"{base_url()}/metrics", timeout=10)
+        response = requests.get(f"{base_url()}/metrics", timeout=API_READ_TIMEOUT)
     except requests.RequestException as exc:
         raise RuntimeError(f"API metrics request failed: {exc}") from exc
     if response.status_code >= 400:
