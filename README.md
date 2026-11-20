@@ -503,9 +503,14 @@ To configure deployment:
    - `RENDER_UI_DEPLOY_HOOK_URL`
    - `LIVE_API_URL` — the API service base URL, e.g. `https://aml-capstone-api.onrender.com`
    - `LIVE_UI_URL` — the UI service base URL, e.g. `https://aml-capstone-ui.onrender.com`
-5. Confirm the UI's `AML_API_URL` is set from the API service's private `hostport` by the
-   Blueprint. The Streamlit client uses HTTP for that scheme-less inter-service address. Use the
-   `https://` public service URL for `LIVE_API_URL`.
+5. Confirm the UI service's `AML_API_URL` is the API's **public HTTPS URL**, currently
+   `https://aml-capstone-api-98go.onrender.com`. The Blueprint sets this value explicitly;
+   update `render.yaml` if deploying a different API. Render free web services cannot receive
+   private-network traffic, so their private `hostport` cannot be used here. If the deployed UI
+   still shows a name-resolution error for a `:10000` hostname, update `AML_API_URL` in the
+   Render UI service's Environment settings and save and deploy the change. Sync the Blueprint
+   after this fix is merged so later syncs keep the public address. Use the same public base URL
+   for the GitHub `LIVE_API_URL` secret.
 6. In GitHub Actions, manually run the **Deploy** workflow on `main` to perform the first
    configured deployment. Later pushes to `main` deploy automatically. The workflow requires
    the secrets above and successful lint/tests before publishing or deploying.
@@ -515,7 +520,11 @@ The workflow polls for up to 15 minutes per service; free Render services may sl
 inactivity and take time to start. Confirm current free-tier quotas before deployment. This
 Blueprint deploys the API and UI only; Prometheus/Grafana remain part of the local Docker Compose
 stack. Public GHCR images and the API endpoints contain no authentication, so do not use this
-deployment for sensitive or production workloads.
+deployment for sensitive or production workloads. The UI allows up to 90 seconds for common
+API calls to accommodate a sleeping free service; failures are still reported if it takes longer.
+The deployment workflow's separate public API and UI health checks do not prove that the UI can
+reach the API. After deploying, open the UI's **Service status** page and confirm the API is
+reachable, then try another API-backed page.
 
 ### End-to-end pipeline
 
