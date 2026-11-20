@@ -41,6 +41,49 @@ python -m pip install -r requirements-api.txt -r requirements-ui.txt -r requirem
 
 The model dependencies support the tree baselines and SHAP explanations.
 
+## Reproducible analysis notebook
+
+Open `notebooks/capstone_analysis.ipynb` in VS Code using the project virtual environment, or
+run `python -m jupyter lab` from the repository root. Install the Setup requirements first.
+The notebook loads the local raw CSV, explores and checks it, and calls the same pipeline used
+by `python run_pipeline.py`. A full run trains all candidates and may take substantial CPU time;
+it creates a new, isolated output directory under `data/processed/pipeline-runs/` and does not
+replace the artifacts used by the API. Review the saved selection before changing deployed models.
+
+The notebook includes data distributions, missingness and source inconsistencies, all nine
+masking scenarios, validation results, grouped cross-validation, a training-median reference
+baseline, and the observed-profile optimisation. It also examines mean under- and
+overestimation and illustrative asymmetric losses: one or two arbitrary cost units per person
+under- or overestimated. These are sensitivity assumptions, not measured financial costs.
+MAE, RMSE, bias and losses are per artificially masked cell; R² can be undefined for constant
+targets. The MAE-selected model is not necessarily optimal for an asymmetric cost.
+
+To reuse a complete run in PowerShell, set `AML_NOTEBOOK_RUN_DIR` to its absolute path before
+starting Jupyter. Its configuration, raw and processed checksums must match; these checks do
+not verify the code revision or dependency versions used to produce the original run. By default
+the test counties remain reserved. After freezing the methodology and selection, explicitly set
+`AML_EVALUATE_TEST=1` before launching Jupyter to calculate and save the final held-out
+report. The original manifest describes the pipeline run and remains unchanged; the presence of
+`reports/selected_test_diagnostics.csv` records the separate test evaluation. Do not tune the
+model repeatedly against this report. For the equivalent standalone step:
+
+```powershell
+python -m src.models.diagnostics --input "data\processed\pipeline-runs\YOUR_RUN\data\kenya_county_population.csv" --model-dir "data\processed\pipeline-runs\YOUR_RUN\models\selected" --output "data\processed\pipeline-runs\YOUR_RUN\reports\selected_test_diagnostics.csv" --split test
+```
+
+Replace `YOUR_RUN` with the actual run directory name. The command refuses to overwrite an
+existing report. The notebook's tables and charts can also be generated without Jupyter:
+
+```powershell
+python -m src.analysis_workflow --run-dir "data\processed\pipeline-runs\YOUR_RUN" --output-dir "data\processed\pipeline-runs\YOUR_RUN\reports\analysis-export"
+```
+
+The output directory must not already exist. Small county samples, simulated masks, source
+inconsistencies and potential distribution shift mean that neither high scores nor grouped CV
+can guarantee good future performance or the absence of overfitting. A negative R² indicates
+performance worse than predicting the evaluation sample's mean; the separate median reference
+uses only training counties.
+
 ## Cleaning and exploratory analysis
 
 Run these commands from the repository root:
