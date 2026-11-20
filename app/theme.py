@@ -1,6 +1,14 @@
 """Theme state and CSS for a purple light/dark Streamlit interface."""
 
+from pathlib import Path
+from urllib.parse import quote
+
 import streamlit as st
+import streamlit.components.v1 as components
+
+device_theme = components.declare_component(
+    "device_theme", path=str(Path(__file__).parent / "theme_detector")
+)
 
 PALETTES = {
     "light": {
@@ -13,7 +21,7 @@ PALETTES = {
         "name": "dark", "primary": "#BBA3FF", "accent": "#DDC5FF", "text": "#F6F1FF",
         "background": "#130C22", "surface": "#211530", "surface_alt": "#302044",
         "grid": "#58436F", "muted": "#C7B9D9", "border": "#55406D",
-        "button": "#8052D9", "button_hover": "#9868EC", "button_text": "#FFFFFF",
+        "button": "#8052D9", "button_hover": "#6835B9", "button_text": "#FFFFFF",
     },
 }
 
@@ -25,16 +33,32 @@ def palette() -> dict:
 
 
 def toggle() -> None:
-    if "theme_mode" not in st.session_state:
-        st.session_state.theme_mode = "light"
-    selected = st.sidebar.toggle(
-        "Dark mode", value=st.session_state.theme_mode == "dark", key="theme_toggle"
-    )
-    st.session_state.theme_mode = "dark" if selected else "light"
+    detected = device_theme(key="device_theme")
+    if not st.session_state.get("theme_manual", False):
+        st.session_state.theme_mode = detected if detected in ("light", "dark") else "light"
+    target = "light" if st.session_state.theme_mode == "dark" else "dark"
+    if st.button(
+        f"Switch to {target} mode", key="theme_button", help=f"Switch to {target} mode"
+    ):
+        st.session_state.theme_mode = target
+        st.session_state.theme_manual = True
+        st.rerun()
 
 
 def css() -> None:
     colors = palette()
+    icon_path = (
+        '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 '
+        '1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42M17.65 '
+        '6.35l1.42-1.42"/>'
+        if colors["name"] == "dark"
+        else '<path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>'
+    )
+    icon = quote(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
+        f'viewBox="0 0 24 24" fill="none" stroke="{colors["text"]}" '
+        f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{icon_path}</svg>'
+    )
     st.markdown(
         f"""
         <style>
@@ -65,7 +89,7 @@ def css() -> None:
         }}
         [data-testid="stMain"] .block-container {{
             max-width: 1200px;
-            padding-top: 2rem;
+            padding-top: 5rem;
             padding-bottom: 4rem;
         }}
         [data-testid="stAppViewContainer"] h1,
@@ -133,6 +157,17 @@ def css() -> None:
         [data-testid="stMetricValue"] {{
             color: var(--ui-primary);
         }}
+        [data-testid="stMetric"] {{
+            background: var(--ui-surface);
+            border: 1px solid var(--ui-border);
+            border-radius: 16px;
+            padding: 1rem 1.15rem;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }}
+        [data-testid="stMetric"]:hover {{
+            border-color: var(--ui-primary);
+            box-shadow: 0 6px 20px rgba(109, 40, 217, 0.12);
+        }}
         .stButton>button, .stDownloadButton>button {{
             background: var(--ui-button);
             color: var(--ui-button-text);
@@ -147,19 +182,109 @@ def css() -> None:
             border-color: var(--ui-button-hover);
             box-shadow: 0 4px 14px rgba(109, 40, 217, 0.25);
         }}
+        .stButton>button p, .stDownloadButton>button p {{
+            color: var(--ui-button-text) !important;
+        }}
         .stButton>button:focus-visible, .stDownloadButton>button:focus-visible {{
             outline: 3px solid var(--ui-accent);
             outline-offset: 3px;
+        }}
+        .stButton>button:active, .stDownloadButton>button:active {{
+            transform: scale(0.98);
+        }}
+        .st-key-theme_button button {{
+            position: relative;
+            min-width: 48px;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+            background: var(--ui-surface-alt);
+            border: 1px solid var(--ui-border);
+        }}
+        .st-key-theme_button button p {{
+            font-size: 0;
+        }}
+        .st-key-theme_button button::after {{
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            background: url("data:image/svg+xml,{icon}") center / contain no-repeat;
+        }}
+        .st-key-theme_button button:hover {{
+            background: var(--ui-surface);
+            border-color: var(--ui-primary);
+        }}
+        @media (prefers-reduced-motion: reduce) {{
+            .stButton>button, .stDownloadButton>button, [data-testid="stMetric"] {{
+                transition: none;
+            }}
         }}
         [data-testid="stSidebar"] [role="radiogroup"] label {{
             border: 1px solid transparent;
             border-radius: 10px;
             padding: 0.45rem 0.65rem;
-            transition: background-color 160ms ease, border-color 160ms ease;
+            transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
         }}
         [data-testid="stSidebar"] [role="radiogroup"] label:hover {{
             background: var(--ui-surface-alt);
             border-color: var(--ui-border);
+            transform: translateX(4px);
+        }}
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
+            background: var(--ui-surface-alt);
+            border-color: var(--ui-primary);
+        }}
+        [data-testid="stSidebar"] [role="radiogroup"] label:focus-within {{
+            outline: 2px solid var(--ui-primary);
+            outline-offset: 2px;
+        }}
+        [data-testid="stAlert"] {{
+            color: var(--ui-text);
+        }}
+        [data-testid="stAlertContainer"] {{
+            background: var(--ui-surface-alt);
+            border: 1px solid var(--ui-border);
+            color: var(--ui-text);
+        }}
+        [data-testid="stAlertContainer"] [data-testid^="stAlertContent"] {{
+            color: var(--ui-text);
+        }}
+        [data-testid="stAlert"] p {{
+            color: var(--ui-text) !important;
+        }}
+        [data-testid="stFileUploaderDropzone"] {{
+            background: var(--ui-surface-alt);
+            border: 1px dashed var(--ui-border);
+            color: var(--ui-text);
+        }}
+        [data-testid="stFileUploaderDropzoneInstructions"],
+        [data-testid="stFileUploaderDropzoneInstructions"] span {{
+            color: var(--ui-text);
+        }}
+        [data-testid="stFileUploaderDropzone"] button {{
+            background: var(--ui-button);
+            color: var(--ui-button-text);
+            border: 1px solid var(--ui-button);
+        }}
+        [data-testid="stFileUploaderDropzone"] button p {{
+            color: var(--ui-button-text) !important;
+        }}
+        [data-testid="stFileUploaderDropzone"] button:hover {{
+            background: var(--ui-button-hover);
+            border-color: var(--ui-button-hover);
+        }}
+        [data-testid="stFileUploaderDropzone"] button:focus-visible {{
+            outline: 3px solid var(--ui-primary);
+            outline-offset: 3px;
+        }}
+        @media (prefers-reduced-motion: reduce) {{
+            [data-testid="stSidebar"] [role="radiogroup"] label {{
+                transition: none;
+            }}
         }}
         .stTabs [data-baseweb="tab"] {{
             background: var(--ui-surface-alt);

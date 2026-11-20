@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Device appearance</title></head>
+<body>
+<script>
+  const preference = window.matchMedia("(prefers-color-scheme: dark)");
+  const send = () => window.parent.postMessage({
+    isStreamlitMessage: true,
+    type: "streamlit:setComponentValue",
+    value: preference.matches ? "dark" : "light",
+    dataType: "json"
+  }, "*");
+  preference.addEventListener("change", send);
+  window.addEventListener("message", event => {
+    if (event.data.type === "streamlit:render") send();
+  });
+  window.parent.postMessage({
+    isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1
+  }, "*");
+  window.parent.postMessage({
+    isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 0
+  }, "*");
+</script>
+</body>
+</html>
