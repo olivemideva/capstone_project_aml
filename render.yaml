@@ -23,7 +23,4 @@ services:
     healthCheckPath: /_stcore/health
     envVars:
       - key: AML_API_URL
-        fromService:
-          type: web
-          name: aml-capstone-api
-          property: hostport
+        value: https://aml-capstone-api-98go.onrender.com
