@@ -4,6 +4,12 @@ This capstone explores reconstructing incomplete county-level demographic profil
 comparing simulated prioritisation strategies. It uses FastAPI, a purple-themed Streamlit
 interface with light and dark modes, and Docker.
 
+The project asks two separate questions: how accurately can deliberately hidden age-sex
+population counts be estimated, and how do simulated county selections change with planning
+priorities? The reconstruction uses 2019 data; the planning simulation uses **observed**
+county profiles, not reconstructed predictions. Both are experimental decision-support
+tools, not official population statistics or real funding decisions.
+
 ## Status
 
 The local data pipeline, model selection, FastAPI service, Streamlit interface and local Docker
@@ -51,10 +57,21 @@ The Render Blueprint configures only the API and UI; it does not deploy the moni
   and [docker-compose.yml](docker-compose.yml).
 - API implementation: [src/api/](src/api/).
 - Exploratory analysis and results: [notebooks/capstone_analysis.ipynb](notebooks/capstone_analysis.ipynb).
+- Final [slide deck](docs/presentation/presentation.pdf) and
+  [presenter's guide](docs/presentation/presenter_guide.pdf), with editable
+  [slide source](docs/presentation/presentation.tex) and
+  [guide source](docs/presentation/presenter_guide.tex).
+
+To rebuild the presentation PDFs, install a LaTeX distribution with Beamer, TikZ and
+the other packages named in the sources. From `docs/presentation`, run `pdflatex
+-interaction=nonstopmode -halt-on-error presentation.tex` twice, then run the equivalent
+command twice for `presenter_guide.tex`. The SHAP image in that directory is needed by the
+slide deck. The PDFs capture the reported validation results; they do not automatically
+update if the models or input data change.
 
 ## Data
 
-The planned source is the [HDX HAPI population dataset](https://data.humdata.org/dataset/hdx-hapi-population).
+The source is the [HDX HAPI population dataset](https://data.humdata.org/dataset/hdx-hapi-population).
 Download the global non-HRP population CSV separately and place it at
 `data/raw/hdx_hapi_population_global_non_hrp.csv`. Local files in `data/` are ignored by Git.
 The supplied extract contains Kenya's 47 admin-1 counties for the 2019 reference period. A
@@ -237,6 +254,73 @@ create a new selection. The final test split has not been evaluated. The validat
 seven counties and CV for 10% county-block has only three eligible training counties, so rankings
 are preliminary. Autoencoder candidate artifacts and reports are regenerable and ignored by Git;
 selected artifacts are intended to be tracked. Only load trusted model artifacts.
+
+## Technique justification
+
+The reconstruction problem is a small **tabular, cross-sectional** dataset: 47 county
+profiles with 42 age-sex cells each, rather than a series of measurements over time.
+Training, tuning and comparisons are performed per masking scenario with counties kept
+separate between splits.
+
+- **Random Forest** combines trees to model nonlinear associations between available
+  profile values and a missing cell. It was selected because its unweighted mean MAE
+  across the nine validation scenarios was lowest (5,582.32 people per masked cell).
+  This is a validation-based choice, not proof it will be best on new counties.
+- **XGBoost** provides a boosted-tree comparison that can also capture nonlinear
+  relationships. The **masked autoencoder** tests a neural reconstruction approach;
+  its use of reported totals as extra training supervision makes its information
+  different from the tree models. A training-county median provides a simpler reference.
+- **Weighted-sum optimisation** makes the effect of explicit planning weights easy to
+  understand, while **NSGA-III** explores multiple trade-offs without relying on a
+  single set of weights. Both use the same simplified objectives and budget.
+
+The following alternatives were not implemented or benchmarked for this project; these
+are design reasons for excluding them, not experimental claims that they perform worse:
+
+- **LSTM or other temporal sequence models:** the input is a single 2019 snapshot,
+  not a longitudinal sequence of county observations. Treating age bands as a time
+  series would not supply the temporal evidence needed for forecasting.
+- **Large language models (LLMs):** the task is numerical reconstruction from a small
+  structured table, not text understanding. A generative language model would add
+  complexity and potential unsupported numerical outputs without a demonstrated
+  benefit for this dataset.
+- **K-nearest-neighbour and multiple imputation:** these are plausible alternatives,
+  but were outside the implemented comparison. Distance-based methods need careful
+  scaling and handling of missing features; multiple imputation would require
+  additional assumptions and uncertainty analysis. The training-median reference
+  offers a simpler check, not a substitute for benchmarking these alternatives.
+- **Other deep architectures:** the limited number of counties makes training and
+  evaluating more complex neural models uncertain. The autoencoder is the neural
+  approach explored here; further architectures would require a separately designed
+  comparison and preferably more independent data.
+
+## Limitations and responsible use
+
+- The selected model's results are **validation**, not final test results: the seven
+  test counties remain reserved. Seven validation counties and simulated masks limit
+  confidence about new counties and real missingness. The 10% county-block tuning
+  scenario has only three eligible training counties.
+- The source contains 137 inconsistent checks among 1,175 complete total/component
+  checks. These are checks, not counts of affected counties. The data are a 2019
+  snapshot, so current populations may differ.
+- The median reference has lower MAE in three of nine validation scenarios. MAE and
+  RMSE describe error per artificially hidden cell, while R² is a comparison with
+  the evaluation mean, not a percentage of correct predictions. Reproducibility
+  checks do not prove generalisation or the absence of overfitting.
+- Each saved reconstruction model corresponds to a particular pattern and rate.
+  The selected scenario is not automatically checked against the uploaded gaps;
+  whole-county gaps contain no observed demographic inputs. Predictions can be
+  fractional and uploaded aggregate totals are not recalculated.
+- The planning exercise uses observed profiles, equal simulated county costs and
+  simplified objectives. Its dependency-ratio proxy is not a validated fairness
+  measure, and neither its solutions nor hypervolume establish real-world impact.
+- The public API lacks authentication and rate limiting. Do not upload sensitive
+  data or use this deployment for production decisions. Public uptime monitoring
+  and a status page have not been confirmed.
+
+After freezing the methodology, evaluate the reserved test counties once, investigate
+source discrepancies, compare with independent and more recent data, and seek domain
+review before considering operational use.
 
 ## Simulated county prioritisation
 

@@ -33,3 +33,12 @@ __pycache__/
 .env.*
 !.env.example
 .vscode/
+
+# Generated LaTeX files
+/docs/presentation/*.aux
+/docs/presentation/*.log
+/docs/presentation/*.nav
+/docs/presentation/*.out
+/docs/presentation/*.snm
+/docs/presentation/*.synctex.gz
+/docs/presentation/*.toc
