@@ -4,11 +4,25 @@ This capstone explores reconstructing incomplete county-level demographic profil
 comparing simulated prioritisation strategies. It uses FastAPI, a purple-themed Streamlit
 interface with light and dark modes, and Docker.
 
+The project asks two separate questions: how accurately can deliberately hidden age-sex
+population counts be estimated, and how do simulated county selections change with planning
+priorities? The reconstruction uses 2019 data; the planning simulation uses **observed**
+county profiles, not reconstructed predictions. Both are experimental decision-support
+tools, not official population statistics or real funding decisions.
+
 ## Status
 
 The local data pipeline, model selection, FastAPI service, Streamlit interface and local Docker
-monitoring stack are implemented. GitHub Actions CI/CD and the Render Blueprint are configured;
-deployment requires the Render services and GitHub secrets described below.
+monitoring stack are implemented. The API and UI are deployed on Render; the latest local
+changes are not necessarily deployed until they have been committed and deployed.
+
+- Public application: https://aml-capstone-ui.onrender.com/
+- Public API documentation: https://aml-capstone-api-98go.onrender.com/docs
+- API health: https://aml-capstone-api-98go.onrender.com/health
+
+The public services can sleep on Render's free tier and may take time to wake. The local
+Prometheus and Grafana stack is not deployed by the Render Blueprint. A public monitoring
+status page has not yet been confirmed.
 
 ## Architecture
 
@@ -43,10 +57,21 @@ The Render Blueprint configures only the API and UI; it does not deploy the moni
   and [docker-compose.yml](docker-compose.yml).
 - API implementation: [src/api/](src/api/).
 - Exploratory analysis and results: [notebooks/capstone_analysis.ipynb](notebooks/capstone_analysis.ipynb).
+- Final [slide deck](docs/presentation/presentation.pdf) and
+  [presenter's guide](docs/presentation/presenter_guide.pdf), with editable
+  [slide source](docs/presentation/presentation.tex) and
+  [guide source](docs/presentation/presenter_guide.tex).
+
+To rebuild the presentation PDFs, install a LaTeX distribution with Beamer, TikZ and
+the other packages named in the sources. From `docs/presentation`, run `pdflatex
+-interaction=nonstopmode -halt-on-error presentation.tex` twice, then run the equivalent
+command twice for `presenter_guide.tex`. The SHAP image in that directory is needed by the
+slide deck. The PDFs capture the reported validation results; they do not automatically
+update if the models or input data change.
 
 ## Data
 
-The planned source is the [HDX HAPI population dataset](https://data.humdata.org/dataset/hdx-hapi-population).
+The source is the [HDX HAPI population dataset](https://data.humdata.org/dataset/hdx-hapi-population).
 Download the global non-HRP population CSV separately and place it at
 `data/raw/hdx_hapi_population_global_non_hrp.csv`. Local files in `data/` are ignored by Git.
 The supplied extract contains Kenya's 47 admin-1 counties for the 2019 reference period. A
@@ -230,6 +255,73 @@ seven counties and CV for 10% county-block has only three eligible training coun
 are preliminary. Autoencoder candidate artifacts and reports are regenerable and ignored by Git;
 selected artifacts are intended to be tracked. Only load trusted model artifacts.
 
+## Technique justification
+
+The reconstruction problem is a small **tabular, cross-sectional** dataset: 47 county
+profiles with 42 age-sex cells each, rather than a series of measurements over time.
+Training, tuning and comparisons are performed per masking scenario with counties kept
+separate between splits.
+
+- **Random Forest** combines trees to model nonlinear associations between available
+  profile values and a missing cell. It was selected because its unweighted mean MAE
+  across the nine validation scenarios was lowest (5,582.32 people per masked cell).
+  This is a validation-based choice, not proof it will be best on new counties.
+- **XGBoost** provides a boosted-tree comparison that can also capture nonlinear
+  relationships. The **masked autoencoder** tests a neural reconstruction approach;
+  its use of reported totals as extra training supervision makes its information
+  different from the tree models. A training-county median provides a simpler reference.
+- **Weighted-sum optimisation** makes the effect of explicit planning weights easy to
+  understand, while **NSGA-III** explores multiple trade-offs without relying on a
+  single set of weights. Both use the same simplified objectives and budget.
+
+The following alternatives were not implemented or benchmarked for this project; these
+are design reasons for excluding them, not experimental claims that they perform worse:
+
+- **LSTM or other temporal sequence models:** the input is a single 2019 snapshot,
+  not a longitudinal sequence of county observations. Treating age bands as a time
+  series would not supply the temporal evidence needed for forecasting.
+- **Large language models (LLMs):** the task is numerical reconstruction from a small
+  structured table, not text understanding. A generative language model would add
+  complexity and potential unsupported numerical outputs without a demonstrated
+  benefit for this dataset.
+- **K-nearest-neighbour and multiple imputation:** these are plausible alternatives,
+  but were outside the implemented comparison. Distance-based methods need careful
+  scaling and handling of missing features; multiple imputation would require
+  additional assumptions and uncertainty analysis. The training-median reference
+  offers a simpler check, not a substitute for benchmarking these alternatives.
+- **Other deep architectures:** the limited number of counties makes training and
+  evaluating more complex neural models uncertain. The autoencoder is the neural
+  approach explored here; further architectures would require a separately designed
+  comparison and preferably more independent data.
+
+## Limitations and responsible use
+
+- The selected model's results are **validation**, not final test results: the seven
+  test counties remain reserved. Seven validation counties and simulated masks limit
+  confidence about new counties and real missingness. The 10% county-block tuning
+  scenario has only three eligible training counties.
+- The source contains 137 inconsistent checks among 1,175 complete total/component
+  checks. These are checks, not counts of affected counties. The data are a 2019
+  snapshot, so current populations may differ.
+- The median reference has lower MAE in three of nine validation scenarios. MAE and
+  RMSE describe error per artificially hidden cell, while R² is a comparison with
+  the evaluation mean, not a percentage of correct predictions. Reproducibility
+  checks do not prove generalisation or the absence of overfitting.
+- Each saved reconstruction model corresponds to a particular pattern and rate.
+  The selected scenario is not automatically checked against the uploaded gaps;
+  whole-county gaps contain no observed demographic inputs. Predictions can be
+  fractional and uploaded aggregate totals are not recalculated.
+- The planning exercise uses observed profiles, equal simulated county costs and
+  simplified objectives. Its dependency-ratio proxy is not a validated fairness
+  measure, and neither its solutions nor hypervolume establish real-world impact.
+- The public API lacks authentication and rate limiting. Do not upload sensitive
+  data or use this deployment for production decisions. Public uptime monitoring
+  and a status page have not been confirmed.
+
+After freezing the methodology, evaluate the reserved test counties once, investigate
+source discrepancies, compare with independent and more recent data, and seek domain
+review before considering operational use.
+
 ## Simulated county prioritisation
 
 After cleaning, run:
@@ -318,14 +410,20 @@ streamlit run app/streamlit_app.py
 The interface reads the API base URL from `AML_API_URL` and defaults to
 `http://127.0.0.1:8000` if unset. It includes four pages:
 
-- **Reconstruct**: submit a full 42-key age-sex profile with selected `null` values and run
-  scenario-specific reconstruction.
-- **Indicators**: inspect county indicator charts and optionally upload a licensed Kenya county
-  GeoJSON for choropleth rendering. The UI validates county-code matches between API data and
-  uploaded GeoJSON.
-- **Pareto Explorer**: run weighted-sum and NSGA-III simulated prioritisation from form inputs.
-- **Monitoring**: sample `/health` and `/metrics`, chart session-level metric history, and
-  generate an on-demand Evidently drift report from user-uploaded reference/current CSV files.
+The interface initially follows the browser/device light or dark preference. The sun/moon
+button at the top overrides that choice for the current Streamlit session; open a new session
+to follow the device setting again.
+
+- **Fill missing numbers**: upload a processed CSV with one county per row and estimate
+  missing age-sex values. Download the blank template on the page to see the required 42
+  population column names. Leave missing cells empty (or use `NA` or `null`); zero is a
+  known value. Up to 100 rows and 5 MB are accepted per upload. Other columns are retained,
+  but aggregate totals are not recalculated and must be checked separately. Only the 42
+  age-sex values are sent to the configured API, one incomplete row at a time.
+- **Explore counties**: compare county figures and optionally upload licensed county boundaries
+  for a map. The UI checks county codes against the API data.
+- **Compare plans**: explore simulated county selections with different priorities.
+- **Service status**: check service health, chart activity and compare two uploaded datasets.
 
 Monitoring history is only stored in Streamlit session state and resets when the app restarts
 or the browser session is cleared. The drift report is generated locally from uploaded files and
@@ -336,7 +434,7 @@ is not an automated production drift monitor.
 Install Docker Desktop with the Compose plugin, then run from the project root:
 
 ```powershell
-docker compose up --build -d
+docker compose up --build -d --wait
 ```
 
 The Compose stack builds the API and Streamlit UI as slim, non-root images and starts Prometheus
@@ -344,23 +442,28 @@ and Grafana. Build contexts exclude the local `data/` directory; the API image i
 tracked selected model artifacts and observed indicator file it needs. All host ports bind to
 localhost:
 
-The `-d` flag runs the services in the background and returns you to the terminal. The
-frontend is at `http://127.0.0.1:8501` and the API documentation is at
-`http://127.0.0.1:8000/docs`; the UI connects to the API inside the Compose network.
+The `-d` flag runs the services in the background and returns you to the terminal; `--wait`
+waits for the services to start or become healthy. Compose starts Streamlit automatically;
+there is no separate Streamlit command when using Docker. The frontend is at
+`http://127.0.0.1:18501` and the API documentation is at `http://127.0.0.1:18000/docs`.
+The UI connects to the API inside the Compose network. Reload the frontend if it was open
+while the containers were restarting.
 
 The API image installs the runtime needed by the currently selected Random Forest models. If
 `models/selected/selection.json` selects XGBoost instead, set `AML_INSTALL_XGBOOST=true` in the
 environment before building (for PowerShell, use `$env:AML_INSTALL_XGBOOST = "true"`). The
 optional XGBoost runtime is defined in `requirements-api-xgboost.txt`.
 
-- UI: `http://127.0.0.1:8501`
-- API health: `http://127.0.0.1:8000/health`
-- API metrics: `http://127.0.0.1:8000/metrics`
-- Prometheus: `http://127.0.0.1:9090`
-- Grafana: `http://127.0.0.1:3000` (local-development default credentials: `admin` / `admin`)
+- UI: `http://127.0.0.1:18501`
+- API health: `http://127.0.0.1:18000/health`
+- API metrics: `http://127.0.0.1:18000/metrics`
+- Prometheus: `http://127.0.0.1:19090`
+- Grafana: `http://127.0.0.1:13000` (local-development default credentials: `admin` / `admin`)
 
 If one of these host ports is already in use, override its `*_HOST_PORT` variable when starting
 Compose: `API_HOST_PORT`, `UI_HOST_PORT`, `PROMETHEUS_HOST_PORT`, or `GRAFANA_HOST_PORT`.
+For example, in Git Bash use `GRAFANA_HOST_PORT=13001 docker compose up --build -d --wait`
+and open Grafana on port 13001. No fixed port can be guaranteed free on every machine.
 Prometheus scrapes the API every 15 seconds. Grafana provisions a Prometheus datasource and an
 API overview dashboard with request/error/prediction totals, request rates and latency. Named
 volumes retain Prometheus and Grafana state between container restarts. Stop the services with
@@ -438,5 +541,5 @@ configuration, and check counts. Failed runs may leave partial files without a m
 a new run name for a retry. The pipeline does not overwrite the previously committed
 `models/selected/` artifacts, and it does not evaluate the held-out test split.
 
-Public service URLs are available only after the Render services have been configured and
-deployed; the localhost addresses above are not publicly accessible.
+The localhost addresses above are not publicly accessible. Use the public links in the status
+section to access the deployed services.

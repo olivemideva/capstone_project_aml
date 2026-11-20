@@ -2,13 +2,13 @@
 
 import streamlit as st
 
-from app import api_client
 from app.pages import indicators, monitoring, pareto_explorer, reconstruct
 from app.theme import css, palette, toggle
 
 st.set_page_config(
     page_title="Kenya Demographic Decision Support", page_icon="app/assets/icon.svg", layout="wide"
 )
+st.logo("app/assets/logo.svg", icon_image="app/assets/icon.svg", size="large")
 toggle()
 css()
 colors = palette()
@@ -16,21 +16,20 @@ colors = palette()
 st.sidebar.markdown(
     '<div class="project-brand"><div class="eyebrow">Kenya demographic data</div>'
     '<div class="brand-title">County Insights</div>'
-    '<div class="brand-copy">Explore profiles and planning trade-offs</div></div>',
+    '<div class="brand-copy">Understand populations and explore planning choices</div></div>',
     unsafe_allow_html=True,
 )
 st.sidebar.subheader("Explore")
 selected_page = st.sidebar.radio(
-    "Page", ["Reconstruct", "Indicators", "Pareto Explorer", "Monitoring"]
+    "Choose a page", ["Fill missing numbers", "Explore counties", "Compare plans", "Service status"]
 )
-st.sidebar.caption("Experimental decision support using 2019 county data.")
-st.sidebar.caption(f"API connection: {api_client.base_url()}")
+st.sidebar.caption("Explore 2019 county data and try experimental planning tools.")
 
-if selected_page == "Reconstruct":
+if selected_page == "Fill missing numbers":
     reconstruct.render(colors)
-elif selected_page == "Indicators":
+elif selected_page == "Explore counties":
     indicators.render(colors)
-elif selected_page == "Pareto Explorer":
+elif selected_page == "Compare plans":
     pareto_explorer.render(colors)
 else:
     monitoring.render(colors)

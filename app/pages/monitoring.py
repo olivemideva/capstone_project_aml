@@ -32,15 +32,21 @@ def _sample_metrics() -> None:
 def _render_history(colors: dict) -> None:
     history = st.session_state.get("metrics_history", [])
     if not history:
-        st.info("No metric samples yet. Use 'Sample metrics now' to add points.")
+        st.info("No readings yet. Select 'Take a reading' to start the charts.")
         return
     frame = pd.DataFrame(history)
     frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True)
+    frame = frame.rename(columns={
+        "timestamp": "Time (UTC)",
+        "request_total": "Requests",
+        "error_total": "Errors",
+        "prediction_total": "Estimates",
+        "average_latency_seconds": "Average response time (seconds)",
+    })
     chart = px.line(
-        frame,
-        x="timestamp",
-        y=["request_total", "error_total", "prediction_total"],
-        title="Cumulative counters over this Streamlit session",
+        frame, x="Time (UTC)", y=["Requests", "Errors", "Estimates"],
+        labels={"value": "Total since service started", "variable": "Reading"},
+        title="Service activity over time",
     )
     chart.update_traces(line={"width": 2})
     chart.update_layout(colorway=[colors["primary"], colors["accent"], "#EC4899"])
@@ -48,9 +54,9 @@ def _render_history(colors: dict) -> None:
     st.plotly_chart(chart, use_container_width=True)
     latency = px.line(
         frame,
-        x="timestamp",
-        y="average_latency_seconds",
-        title="Average API latency (seconds)",
+        x="Time (UTC)",
+        y="Average response time (seconds)",
+        title="Average time taken to respond",
         markers=True,
     )
     latency.update_layout(colorway=[colors["primary"]])
@@ -59,16 +65,16 @@ def _render_history(colors: dict) -> None:
 
 
 def _render_drift_report() -> None:
-    st.subheader("Evidently drift report")
+    st.subheader("Compare two datasets")
     st.caption(
-        "Upload both datasets to generate a local report. "
-        "This is on-demand and not an automatic live monitor."
+        "Optional: upload an earlier dataset and a newer dataset to check for changes "
+        "in their shared columns. The report is created on request, not continuously."
     )
-    reference_file = st.file_uploader("Reference CSV", type=["csv"], key="drift_reference")
-    current_file = st.file_uploader("Current CSV", type=["csv"], key="drift_current")
+    reference_file = st.file_uploader("Earlier dataset (CSV)", type=["csv"], key="drift_reference")
+    current_file = st.file_uploader("Newer dataset (CSV)", type=["csv"], key="drift_current")
     if not reference_file or not current_file:
         return
-    if st.button("Generate drift report", use_container_width=True):
+    if st.button("Compare datasets", use_container_width=True):
         try:
             reference = pd.read_csv(reference_file)
             current = pd.read_csv(current_file)
@@ -87,34 +93,42 @@ def _render_drift_report() -> None:
             )
             st.components.v1.html(report.get_html(), height=900, scrolling=True)
         except Exception as exc:
-            st.error(f"Unable to generate Evidently report: {exc}")
+            st.error(f"Unable to compare the datasets: {exc}")
 
 
 def render(colors: dict) -> None:
-    st.title("Monitor the API")
-    st.markdown("Check service health and explore request and prediction metrics.")
-    st.caption("Metrics are sampled from /metrics and kept only in this Streamlit session.")
+    st.title("Check how the service is doing")
+    st.markdown("See whether the service is responding and follow its activity over time.")
+    st.caption(
+        "Readings are taken when you select the button and are kept only during this "
+        "browser session. Service totals may reset when the service restarts."
+    )
     left, right = st.columns(2)
     try:
         health = api_client.health()
     except Exception as exc:
         st.error(str(exc))
         return
-    left.metric("Service status", health["status"])
-    right.metric("Model family", health["model_family"])
+    status = "Responding" if health["status"] == "ok" else str(health["status"])
+    models = {"random_forest": "Random forest", "xgboost": "XGBoost"}
+    left.metric("Service status", status)
+    right.metric("Estimation method", models.get(health["model_family"], health["model_family"]))
+    st.caption(
+        "The estimation method is the type of model used to fill missing population numbers."
+    )
 
     action_left, action_right = st.columns(2)
-    if action_left.button("Sample metrics now", type="primary", use_container_width=True):
+    if action_left.button("Take a reading", type="primary", use_container_width=True):
         try:
             _sample_metrics()
         except Exception as exc:
             st.error(str(exc))
-    if action_right.button("Reset sampled history", use_container_width=True):
+    if action_right.button("Clear readings", use_container_width=True):
         st.session_state.pop("metrics_history", None)
         st.session_state.pop("metrics_raw", None)
     _render_history(colors)
     raw = st.session_state.get("metrics_raw")
     if raw:
-        with st.expander("Latest raw /metrics payload"):
+        with st.expander("Technical details: latest raw service readings"):
             st.code(raw, language="text")
     _render_drift_report()
