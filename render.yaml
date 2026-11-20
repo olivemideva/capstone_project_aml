@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: aml-capstone-api
+    runtime: image
+    image:
+      url: ghcr.io/olivemideva/capstone_project_aml-api:main
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: AML_MODEL_DIR
+        value: /app/models/selected
+      - key: AML_INDICATORS_PATH
+        value: /app/models/observed_county_indicators.csv
+
+  - type: web
+    name: aml-capstone-ui
+    runtime: image
+    image:
+      url: ghcr.io/olivemideva/capstone_project_aml-ui:main
+    plan: free
+    region: frankfurt
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: AML_API_URL
+        fromService:
+          type: web
+          name: aml-capstone-api
+          property: hostport

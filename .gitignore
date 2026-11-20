@@ -15,6 +15,19 @@ __pycache__/
 /data/processed/*
 !/data/processed/.gitkeep
 
+# Regenerable analysis outputs
+/reports/consistency_checks.csv
+/reports/missingness_by_county.csv
+/reports/missingness_by_column.csv
+/reports/county_population.html
+/reports/county_missingness.html
+/reports/baselines/
+/models/baselines/
+/models/autoencoders/
+/reports/autoencoders/
+/reports/prioritisation/
+/reports/exploration/
+
 # Local environment and editor files
 .env
 .env.*

@@ -1,0 +1,23 @@
+{
+  "selection_metric": "unweighted mean validation MAE across the nine masking scenarios",
+  "selected_family": "random_forest",
+  "mean_mae_by_family": {
+    "random_forest": 5582.3155638175,
+    "autoencoder": 5637.472715106525,
+    "xgboost": 5779.736690966368
+  },
+  "input_sha256": "a040134935fb992e176c44163e78565bff40518f5e7cd0d6e0ec91b9c2d1ffd1",
+  "seed": 42,
+  "artifact_files": [
+    "random_10_random_forest.joblib",
+    "random_20_random_forest.joblib",
+    "random_40_random_forest.joblib",
+    "age-block_10_random_forest.joblib",
+    "age-block_20_random_forest.joblib",
+    "age-block_40_random_forest.joblib",
+    "county-block_10_random_forest.joblib",
+    "county-block_20_random_forest.joblib",
+    "county-block_40_random_forest.joblib"
+  ],
+  "test_evaluated": false
+}

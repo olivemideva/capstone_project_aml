@@ -1,0 +1,6 @@
+seed: 42
+input: data/raw/hdx_hapi_population_global_non_hrp.csv
+output_root: data/processed/pipeline-runs
+prioritisation:
+  budget: 10
+  generations: 200

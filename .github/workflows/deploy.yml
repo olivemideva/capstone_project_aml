@@ -1,0 +1,178 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Validate main before deployment
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: >-
+          python -m pip install
+          -r requirements-api-xgboost.txt
+          -r requirements-ui.txt
+          -r requirements-dev.txt
+          -r requirements-data.txt
+          -r requirements-model.txt
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Test
+        run: python -m pytest
+
+  deploy:
+    name: Publish images and deploy to Render
+    if: github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine image names and API runtime
+        id: image
+        shell: bash
+        run: |
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "api=${repository}-api" >> "$GITHUB_OUTPUT"
+          echo "ui=${repository}-ui" >> "$GITHUB_OUTPUT"
+          family="$(python -c 'import json; print(json.load(open("models/selected/selection.json"))["selected_family"])')"
+          if [[ "$family" == "xgboost" ]]; then
+            echo "install_xgboost=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$family" == "random_forest" ]]; then
+            echo "install_xgboost=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unsupported selected model family: $family" >&2
+            exit 1
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: true
+          build-args: |
+            INSTALL_XGBOOST=${{ steps.image.outputs.install_xgboost }}
+          tags: |
+            ${{ steps.image.outputs.api }}:${{ github.sha }}
+            ${{ steps.image.outputs.api }}:main
+
+      - name: Build and push UI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.ui
+          push: true
+          tags: |
+            ${{ steps.image.outputs.ui }}:${{ github.sha }}
+            ${{ steps.image.outputs.ui }}:main
+
+      - name: Trigger API deploy
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_API_DEPLOY_HOOK_URL }}
+          IMAGE_URL: ${{ steps.image.outputs.api }}:${{ github.sha }}
+        run: |
+          test -n "$DEPLOY_HOOK_URL" || { echo "Missing RENDER_API_DEPLOY_HOOK_URL"; exit 1; }
+          curl --fail --silent --show-error --get \
+            --data-urlencode "imgURL=$IMAGE_URL" \
+            "$DEPLOY_HOOK_URL" >/dev/null 2>&1 || {
+              echo "Render API deploy hook failed"
+              exit 1
+            }
+
+      - name: Wait for API and smoke-test endpoints
+        env:
+          API_URL: ${{ secrets.LIVE_API_URL }}
+        run: |
+          test -n "$API_URL" || { echo "Missing LIVE_API_URL"; exit 1; }
+          api_url="${API_URL%/}"
+          healthy=false
+          for attempt in $(seq 1 60); do
+            response="$(curl --fail --silent --show-error --max-time 10 "$api_url/health" 2>/dev/null || true)"
+            if echo "$response" | jq -e '.status == "ok"' >/dev/null 2>&1; then
+              healthy=true
+              break
+            fi
+            echo "Waiting for API health check ($attempt/60)"
+            sleep 15
+          done
+          if [[ "$healthy" != true ]]; then
+            echo "API did not become healthy within 15 minutes"
+            exit 1
+          fi
+          counties="$(curl --fail --silent --show-error --max-time 20 "$api_url/counties")"
+          echo "$counties" | jq -e 'length == 47' >/dev/null
+          metrics="$(curl --fail --silent --show-error --max-time 20 "$api_url/metrics")"
+          [[ "$metrics" == *api_request_duration_seconds* ]]
+          echo "API health, counties, and metrics smoke tests passed"
+
+      - name: Trigger UI deploy
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_UI_DEPLOY_HOOK_URL }}
+          IMAGE_URL: ${{ steps.image.outputs.ui }}:${{ github.sha }}
+        run: |
+          test -n "$DEPLOY_HOOK_URL" || { echo "Missing RENDER_UI_DEPLOY_HOOK_URL"; exit 1; }
+          curl --fail --silent --show-error --get \
+            --data-urlencode "imgURL=$IMAGE_URL" \
+            "$DEPLOY_HOOK_URL" >/dev/null 2>&1 || {
+              echo "Render UI deploy hook failed"
+              exit 1
+            }
+
+      - name: Wait for UI and smoke-test live site
+        env:
+          UI_URL: ${{ secrets.LIVE_UI_URL }}
+        run: |
+          test -n "$UI_URL" || { echo "Missing LIVE_UI_URL"; exit 1; }
+          ui_url="${UI_URL%/}"
+          healthy=false
+          for attempt in $(seq 1 60); do
+            response="$(curl --fail --silent --show-error --max-time 10 "$ui_url/_stcore/health" 2>/dev/null || true)"
+            if [[ "$response" == "ok" ]]; then
+              healthy=true
+              break
+            fi
+            echo "Waiting for UI health check ($attempt/60)"
+            sleep 15
+          done
+          if [[ "$healthy" != true ]]; then
+            echo "UI did not become healthy within 15 minutes"
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 20 "$ui_url/" >/dev/null
+          echo "UI health and page smoke tests passed"

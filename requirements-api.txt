@@ -1,2 +1,7 @@
 fastapi
 uvicorn[standard]
+prometheus-client>=0.20,<1
+pandas>=2.0,<4
+numpy>=1.24,<3
+scikit-learn==1.9.1
+-r requirements-optimization.txt
