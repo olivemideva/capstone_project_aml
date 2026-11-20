@@ -233,6 +233,33 @@ def test_metrics_raw_raises_for_network_error(monkeypatch):
     with pytest.raises(RuntimeError, match="metrics request failed"):
         api_client.metrics_raw()
 
+def test_api_helpers_allow_free_service_cold_start(monkeypatch):
+    calls = []
+
+    def fake_request(method, path, payload=None, timeout=30.0):
+        calls.append((path, timeout))
+        return {}
+
+    monkeypatch.setattr(api_client, "request", fake_request)
+    api_client.health()
+    api_client.counties()
+    api_client.indicators("KE001")
+    api_client.reconstruct({})
+    assert calls == [
+        ("/health", 90.0),
+        ("/counties", 90.0),
+        ("/indicators/KE001", 90.0),
+        ("/reconstruct", 90.0),
+    ]
+
+    def fake_get(url, timeout):
+        calls.append((url, timeout))
+        return SimpleNamespace(status_code=200, text="metrics")
+
+    monkeypatch.setattr(api_client.requests, "get", fake_get)
+    api_client.metrics_raw()
+    assert calls[-1][1] == 90.0
+
 
 def test_parse_snapshot_extracts_expected_totals():
     raw = """
