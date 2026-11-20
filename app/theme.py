@@ -140,6 +140,24 @@ def css() -> None:
         [data-testid="stMultiSelect"] input {{
             color: var(--ui-text);
         }}
+        [data-testid="stSelectboxVirtualDropdown"],
+        [data-testid="stMultiSelectVirtualDropdown"] {{
+            background: var(--ui-surface);
+            color: var(--ui-text);
+            border: 1px solid var(--ui-border);
+        }}
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"],
+        [data-testid="stMultiSelectVirtualDropdown"] [role="option"] {{
+            background: var(--ui-surface);
+            color: var(--ui-text);
+        }}
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover,
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"][data-focused="true"],
+        [data-testid="stMultiSelectVirtualDropdown"] [role="option"]:hover,
+        [data-testid="stMultiSelectVirtualDropdown"] [role="option"][data-focused="true"] {{
+            background: var(--ui-surface-alt);
+            color: var(--ui-text);
+        }}
         [data-testid="stTextInput"] input:disabled {{
             -webkit-text-fill-color: var(--ui-muted);
             opacity: 1;
