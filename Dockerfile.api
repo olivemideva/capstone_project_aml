@@ -1,0 +1,33 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    AML_MODEL_DIR=/app/models/selected \
+    AML_INDICATORS_PATH=/app/models/observed_county_indicators.csv
+
+WORKDIR /app
+
+ARG INSTALL_XGBOOST=false
+
+RUN useradd --create-home --uid 10001 appuser
+
+COPY requirements-api.txt requirements-api-xgboost.txt requirements-optimization.txt ./
+RUN if [ "$INSTALL_XGBOOST" = "true" ]; then \
+        python -m pip install --no-cache-dir -r requirements-api-xgboost.txt; \
+    else \
+        python -m pip install --no-cache-dir -r requirements-api.txt; \
+    fi
+
+COPY --chown=10001:10001 src/ ./src/
+COPY --chown=10001:10001 models/selected/ ./models/selected/
+COPY --chown=10001:10001 models/observed_county_indicators.csv ./models/observed_county_indicators.csv
+
+USER 10001:10001
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)" || exit 1
+
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
