@@ -6,8 +6,8 @@ FastAPI, a purple-themed Streamlit interface with light and dark modes, and Dock
 
 ## Status
 
-The local data pipeline and tree-model baselines are implemented. The final model, API,
-interface, containers, and deployment have not yet been implemented.
+The local data pipeline, model selection, FastAPI service and Streamlit interface are
+implemented. Docker, CI/CD deployment and public service links are still pending.
 
 ## Data
 
@@ -225,6 +225,30 @@ origins. `AML_MODEL_DIR` and `AML_INDICATORS_PATH` override the default artifact
 successful reconstruction counts. Metrics are in-process and reset on restart; persistent
 history requires an external collector. The API currently has no authentication or public
 rate limiting and should not be treated as a production service.
+
+### Streamlit interface
+
+Install the requirements files listed in Setup, ensure the API is running, then start the UI:
+
+```powershell
+streamlit run app/streamlit_app.py
+```
+
+The interface reads the API base URL from `AML_API_URL` and defaults to
+`http://127.0.0.1:8000` if unset. It includes four pages:
+
+- **Reconstruct**: submit a full 42-key age-sex profile with selected `null` values and run
+  scenario-specific reconstruction.
+- **Indicators**: inspect county indicator charts and optionally upload a licensed Kenya county
+  GeoJSON for choropleth rendering. The UI validates county-code matches between API data and
+  uploaded GeoJSON.
+- **Pareto Explorer**: run weighted-sum and NSGA-III simulated prioritisation from form inputs.
+- **Monitoring**: sample `/health` and `/metrics`, chart session-level metric history, and
+  generate an on-demand Evidently drift report from user-uploaded reference/current CSV files.
+
+Monitoring history is only stored in Streamlit session state and resets when the app restarts
+or the browser session is cleared. The drift report is generated locally from uploaded files and
+is not an automated production drift monitor.
 
 ### End-to-end pipeline
 
