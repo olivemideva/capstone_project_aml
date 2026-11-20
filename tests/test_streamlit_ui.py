@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -5,6 +6,14 @@ import pytest
 from app import api_client
 from app.metrics_parser import parse_snapshot
 from app.pages.indicators import _extract_values
+
+
+def test_streamlit_entry_point_renders_without_exceptions():
+    from streamlit.testing.v1 import AppTest
+
+    script = Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py"
+    app = AppTest.from_file(script).run(timeout=30)
+    assert not app.exception
 
 
 def test_base_url_adds_http_for_render_private_hostport(monkeypatch):

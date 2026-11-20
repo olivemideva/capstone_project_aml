@@ -21,6 +21,8 @@ def palette() -> dict:
 
 
 def toggle() -> None:
+    if "theme_mode" not in st.session_state:
+        st.session_state.theme_mode = "light"
     selected = st.sidebar.toggle(
         "Dark mode", value=st.session_state.theme_mode == "dark", key="theme_toggle"
     )
