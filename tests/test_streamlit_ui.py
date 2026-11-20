@@ -7,10 +7,22 @@ from app.metrics_parser import parse_snapshot
 from app.pages.indicators import _extract_values
 
 
-def test_base_url_requires_http_scheme(monkeypatch):
-    monkeypatch.setenv("AML_API_URL", "localhost:8000")
+def test_base_url_adds_http_for_render_private_hostport(monkeypatch):
+    monkeypatch.setenv("AML_API_URL", "aml-capstone-api:10000")
     api_client.base_url.cache_clear()
-    with pytest.raises(ValueError, match="must start with http"):
+    assert api_client.base_url() == "http://aml-capstone-api:10000"
+
+
+def test_base_url_adds_https_for_render_public_hostname(monkeypatch):
+    monkeypatch.setenv("AML_API_URL", "aml-capstone-api.onrender.com")
+    api_client.base_url.cache_clear()
+    assert api_client.base_url() == "https://aml-capstone-api.onrender.com"
+
+
+def test_base_url_rejects_non_http_scheme(monkeypatch):
+    monkeypatch.setenv("AML_API_URL", "ftp://api.example.com")
+    api_client.base_url.cache_clear()
+    with pytest.raises(ValueError, match="HTTP"):
         api_client.base_url()
 
 

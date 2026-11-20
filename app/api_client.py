@@ -2,6 +2,7 @@
 
 import os
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 import requests
 
@@ -9,8 +10,12 @@ import requests
 @lru_cache(maxsize=1)
 def base_url() -> str:
     value = os.environ.get("AML_API_URL", "http://127.0.0.1:8000").strip().rstrip("/")
-    if not value.startswith(("http://", "https://")):
-        raise ValueError("AML_API_URL must start with http:// or https://")
+    if "://" not in value:
+        scheme = "https" if value.endswith(".onrender.com") else "http"
+        value = f"{scheme}://{value}"
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("AML_API_URL must be an HTTP(S) URL or a hostname")
     return value
 
 
