@@ -336,13 +336,17 @@ is not an automated production drift monitor.
 Install Docker Desktop with the Compose plugin, then run from the project root:
 
 ```powershell
-docker compose up --build
+docker compose up --build -d
 ```
 
 The Compose stack builds the API and Streamlit UI as slim, non-root images and starts Prometheus
 and Grafana. Build contexts exclude the local `data/` directory; the API image includes only the
 tracked selected model artifacts and observed indicator file it needs. All host ports bind to
 localhost:
+
+The `-d` flag runs the services in the background and returns you to the terminal. The
+frontend is at `http://127.0.0.1:8501` and the API documentation is at
+`http://127.0.0.1:8000/docs`; the UI connects to the API inside the Compose network.
 
 The API image installs the runtime needed by the currently selected Random Forest models. If
 `models/selected/selection.json` selects XGBoost instead, set `AML_INSTALL_XGBOOST=true` in the
