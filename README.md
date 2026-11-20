@@ -6,8 +6,8 @@ FastAPI, a purple-themed Streamlit interface with light and dark modes, and Dock
 
 ## Status
 
-The local data pipeline, model selection, FastAPI service and Streamlit interface are
-implemented. Docker, CI/CD deployment and public service links are still pending.
+The local data pipeline, model selection, FastAPI service, Streamlit interface and local Docker
+monitoring stack are implemented. CI/CD deployment and public service links are still pending.
 
 ## Data
 
@@ -249,6 +249,40 @@ The interface reads the API base URL from `AML_API_URL` and defaults to
 Monitoring history is only stored in Streamlit session state and resets when the app restarts
 or the browser session is cleared. The drift report is generated locally from uploaded files and
 is not an automated production drift monitor.
+
+### Docker Compose and monitoring
+
+Install Docker Desktop with the Compose plugin, then run from the project root:
+
+```powershell
+docker compose up --build
+```
+
+The Compose stack builds the API and Streamlit UI as slim, non-root images and starts Prometheus
+and Grafana. Build contexts exclude the local `data/` directory; the API image includes only the
+tracked selected model artifacts and observed indicator file it needs. All host ports bind to
+localhost:
+
+The API image installs the runtime needed by the currently selected Random Forest models. If
+`models/selected/selection.json` selects XGBoost instead, set `AML_INSTALL_XGBOOST=true` in the
+environment before building (for PowerShell, use `$env:AML_INSTALL_XGBOOST = "true"`). The
+optional XGBoost runtime is defined in `requirements-api-xgboost.txt`.
+
+- UI: `http://127.0.0.1:8501`
+- API health: `http://127.0.0.1:8000/health`
+- API metrics: `http://127.0.0.1:8000/metrics`
+- Prometheus: `http://127.0.0.1:9090`
+- Grafana: `http://127.0.0.1:3000` (local-development default credentials: `admin` / `admin`)
+
+If one of these host ports is already in use, override its `*_HOST_PORT` variable when starting
+Compose: `API_HOST_PORT`, `UI_HOST_PORT`, `PROMETHEUS_HOST_PORT`, or `GRAFANA_HOST_PORT`.
+Prometheus scrapes the API every 15 seconds. Grafana provisions a Prometheus datasource and an
+API overview dashboard with request/error/prediction totals, request rates and latency. Named
+volumes retain Prometheus and Grafana state between container restarts. Stop the services with
+`docker compose down`; add `-v` only when intentionally deleting their stored monitoring data.
+For non-local exposure, set a unique `GRAFANA_ADMIN_PASSWORD` and configure appropriate network
+access and authentication first. This stack is for local development and does not make the API
+production-secure.
 
 ### End-to-end pipeline
 
