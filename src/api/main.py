@@ -76,6 +76,11 @@ def create_app(
         data = request.app.state.service.indicators
         return data[["admin1_code", "admin1_name"]].to_dict(orient="records")
 
+    @app.get("/indicators", response_model=list[Indicators])
+    def all_indicators(request: Request):
+        data = request.app.state.service.indicators
+        return [{**row, "source": SOURCE} for row in data.to_dict(orient="records")]
+
     @app.get("/indicators/{county}", response_model=Indicators)
     def indicators_for_county(county: str, request: Request):
         data = request.app.state.service.indicators

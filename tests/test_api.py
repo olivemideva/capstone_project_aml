@@ -59,6 +59,12 @@ def payload():
 def test_health_counties_and_indicators(client):
     assert client.get("/health").json() == {"status": "ok", "model_family": "random_forest"}
     assert len(client.get("/counties").json()) == 4
+    all_data = client.get("/indicators")
+    assert all_data.status_code == 200
+    assert len(all_data.json()) == 4
+    assert all_data.json()[0] == client.get(
+        f"/indicators/{all_data.json()[0]['admin1_code']}"
+    ).json()
     data = client.get("/indicators/ke001").json()
     assert data["children"] == 100 and data["source"].startswith("observed")
     assert client.get("/indicators/missing").status_code == 404
@@ -128,6 +134,7 @@ def test_real_artifact_inference():
     app = create_app()
     with TestClient(app) as real:
         assert len(real.get("/counties").json()) == 47
+        assert len(real.get("/indicators").json()) == 47
         response = real.post("/reconstruct", json=payload())
         assert response.status_code == 200, response.text
         predictions = response.json()

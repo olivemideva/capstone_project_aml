@@ -194,12 +194,17 @@ def test_county_comparison_converts_shares_for_display(monkeypatch):
 
     from app.pages.indicators import fetch_indicator_table
 
-    monkeypatch.setattr(api_client, "counties", lambda: [{"admin1_code": "KE001"}])
-    monkeypatch.setattr(api_client, "indicators", lambda code: {
-        "admin1_code": code, "admin1_name": "Example", "children": 40,
-        "working_age": 50, "elderly": 10, "total": 100, "child_share": 0.4,
-        "elderly_share": 0.1, "dependency_ratio": 1.0, "source": "2019",
-    })
+    calls = []
+
+    def all_indicators():
+        calls.append(True)
+        return [{
+            "admin1_code": "KE001", "admin1_name": "Example", "children": 40,
+            "working_age": 50, "elderly": 10, "total": 100, "child_share": 0.4,
+            "elderly_share": 0.1, "dependency_ratio": 1.0, "source": "2019",
+        }]
+
+    monkeypatch.setattr(api_client, "all_indicators", all_indicators)
     fetch_indicator_table.clear()
     try:
         script = Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py"
@@ -207,6 +212,7 @@ def test_county_comparison_converts_shares_for_display(monkeypatch):
         app.radio[0].set_value("Explore counties").run(timeout=30)
         assert not app.exception
         assert app.dataframe[0].value.loc[0, "Share of population aged 0–14 (%)"] == 40.0
+        assert len(calls) == 1
     finally:
         fetch_indicator_table.clear()
 
@@ -234,11 +240,51 @@ def test_request_raises_for_http_error(monkeypatch):
     api_client.base_url.cache_clear()
 
     def fake_request(*args, **kwargs):
-        return SimpleNamespace(status_code=422, json=lambda: {"detail": "bad payload"})
+        return SimpleNamespace(
+            status_code=422, headers={}, text='{"detail":"bad payload"}',
+            json=lambda: {"detail": "bad payload"},
+        )
 
     monkeypatch.setattr(api_client.requests, "request", fake_request)
     with pytest.raises(RuntimeError, match=r"422 /reconstruct: bad payload"):
         api_client.request("POST", "/reconstruct", payload={"invalid": True})
+
+
+@pytest.mark.parametrize(
+    ("status", "headers", "body", "message"),
+    [
+        (429, {"cf-mitigated": "challenge"}, "<html>private challenge</html>", "security check"),
+        (403, {"Cf-Mitigated": "challenge"}, "<html>private challenge</html>", "security check"),
+        (429, {"content-type": "text/html"}, "<html>private challenge</html>", "rate limited"),
+        (429, {}, "too many requests", "rate limited"),
+        (503, {"content-type": "text/html"}, "<html>private details</html>", "unexpected HTML"),
+        (200, {"content-type": "text/html"}, "<html>private details</html>", "unexpected HTML"),
+    ],
+)
+def test_api_responses_do_not_show_challenge_html(monkeypatch, status, headers, body, message):
+    from requests.structures import CaseInsensitiveDict
+
+    response = SimpleNamespace(
+        status_code=status, headers=CaseInsensitiveDict(headers), text=body,
+        json=lambda: (_ for _ in ()).throw(ValueError("not JSON")),
+    )
+    monkeypatch.setattr(api_client.requests, "request", lambda *args, **kwargs: response)
+    monkeypatch.setattr(api_client.requests, "get", lambda *args, **kwargs: response)
+    for call in (api_client.health, api_client.metrics_raw):
+        with pytest.raises(RuntimeError, match=message) as error:
+            call()
+        assert "<html>" not in str(error.value)
+        assert "private" not in str(error.value)
+
+
+def test_api_rejects_invalid_json_success(monkeypatch):
+    def invalid_json():
+        raise ValueError("invalid")
+
+    response = SimpleNamespace(status_code=200, headers={}, text="not JSON", json=invalid_json)
+    monkeypatch.setattr(api_client.requests, "request", lambda *args, **kwargs: response)
+    with pytest.raises(RuntimeError, match="invalid JSON"):
+        api_client.health()
 
 
 def test_metrics_raw_raises_for_network_error(monkeypatch):
@@ -262,17 +308,19 @@ def test_api_helpers_allow_free_service_cold_start(monkeypatch):
     api_client.health()
     api_client.counties()
     api_client.indicators("KE001")
+    api_client.all_indicators()
     api_client.reconstruct({})
     assert calls == [
         ("/health", 90.0),
         ("/counties", 90.0),
         ("/indicators/KE001", 90.0),
+        ("/indicators", 90.0),
         ("/reconstruct", 90.0),
     ]
 
     def fake_get(url, timeout):
         calls.append((url, timeout))
-        return SimpleNamespace(status_code=200, text="metrics")
+        return SimpleNamespace(status_code=200, headers={}, text="metrics")
 
     monkeypatch.setattr(api_client.requests, "get", fake_get)
     api_client.metrics_raw()
