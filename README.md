@@ -376,8 +376,9 @@ python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 ```
 
 Open `http://127.0.0.1:8000/docs` for the interactive request schemas. `/health` confirms that
-startup artifacts loaded, `/counties` lists county identifiers, and `/indicators/{county}`
-returns observed 2019 indicators by county code. `/reconstruct` requires all 42 age-sex keys,
+startup artifacts loaded, `/counties` lists county identifiers, `/indicators` returns all
+observed 2019 county indicators in one request, and `/indicators/{county}` returns indicators
+by county code. `/reconstruct` requires all 42 age-sex keys,
 with `null` for missing values, plus an explicitly selected `pattern` (`random`, `age-block`
 or `county-block`) and `rate` (10, 20 or 40). It preserves observed cells and returns the
 predicted keys separately; predictions are experimental and the selected scenario is not
@@ -428,6 +429,13 @@ to follow the device setting again.
 Monitoring history is only stored in Streamlit session state and resets when the app restarts
 or the browser session is cleared. The drift report is generated locally from uploaded files and
 is not an automated production drift monitor.
+
+The county comparison page fetches all indicators in one request and caches the result for
+10 minutes; **Refresh county data** explicitly clears that cache. If the hosting provider
+rate-limits a request or presents a security challenge, the dashboard displays a short error
+instead of the provider's HTML. Wait before retrying; persistent challenges require the service
+administrator to investigate hosting-provider protections or contact Render support. This
+change reduces request volume but cannot guarantee that a provider will not challenge requests.
 
 ### Docker Compose and monitoring
 
@@ -524,7 +532,8 @@ deployment for sensitive or production workloads. The UI allows up to 90 seconds
 API calls to accommodate a sleeping free service; failures are still reported if it takes longer.
 The deployment workflow's separate public API and UI health checks do not prove that the UI can
 reach the API. After deploying, open the UI's **Service status** page and confirm the API is
-reachable, then try another API-backed page.
+reachable, then try another API-backed page. Deploy the API version containing `/indicators`
+before the UI version that uses it; an older API does not provide the batch endpoint.
 
 ### End-to-end pipeline
 
