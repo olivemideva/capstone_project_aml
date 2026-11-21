@@ -28,8 +28,7 @@ METRIC_EXPLANATIONS = {
 
 @st.cache_data(ttl=600)
 def fetch_indicator_table() -> pd.DataFrame:
-    counties = api_client.counties()
-    rows = [api_client.indicators(item["admin1_code"]) for item in counties]
+    rows = api_client.all_indicators()
     return pd.DataFrame(rows).sort_values("admin1_name").reset_index(drop=True)
 
 
