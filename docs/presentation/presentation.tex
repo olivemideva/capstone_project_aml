@@ -51,21 +51,38 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Data and preparation}
-  \begin{columns}[T]
-    \column{0.56\textwidth}
-    \begin{itemize}
-      \item Kenya's 47 county profiles, from a 2019 HDX HAPI age--sex extract.
-      \item 42 age--sex cells per county: female and male, in five-year age bands and 100+.
-      \item Source totals were checked, not assumed to be correct.
-      \item 137 of 1,175 completed consistency checks were inconsistent.
-    \end{itemize}
-    \column{0.42\textwidth}
-    \begin{block}{Avoiding leakage}
-      Source aggregate totals and county identifiers are not demographic model predictors.
-    \end{block}
-    \small Source: project cleaning and consistency report.
-  \end{columns}
+\begin{frame}{Dataset: from global records to Kenya}
+  \begin{enumerate}
+    \item \textbf{Before filtering:} the downloaded HDX HAPI non-HRP extract has
+    963,714 records and 21 columns, across 127 location codes and administrative
+    levels 0, 1 and 2.
+    \item \textbf{Select the study area:} retain Kenya (\texttt{KEN}) and county
+    level (\texttt{admin\_level = 1}). This leaves 3,102 records for 47 counties,
+    covering the 2019 reference period.
+    \item \textbf{Original format:} separate rows describe a county, sex and age
+    group, with a population count. The source also contains combined-sex and
+    all-age totals, location identifiers and other metadata.
+  \end{enumerate}
+  \small Counts describe the local source extract used for the saved model;
+  another download may differ.
+\end{frame}
+
+\begin{frame}{Cleaning and the final dataset}
+  \begin{itemize}
+    \item Standardise labels and spaces; check all 47 county codes, unique
+    code--name mappings, valid categories and one complete reference period.
+    \item Reject duplicate county--sex--age records and invalid observed counts;
+    do not silently fill missing values.
+    \item Reshape the records into \textbf{47 rows and 68 columns}: two county
+    identifiers plus 66 reported population values, including totals.
+    \item This extract has no missing population cells after cleaning; hide known
+    values later to test reconstruction. 137 of 1,175 total checks disagree;
+    these are flagged, not silently corrected.
+  \end{itemize}
+  \begin{block}{Model inputs}
+    Use 42 female and male age-band cells per county. Tree models exclude
+    county identifiers and source aggregate totals as predictors.
+  \end{block}
 \end{frame}
 
 \begin{frame}{Experiment design}
@@ -83,6 +100,21 @@
   \end{alertblock}
 \end{frame}
 
+\begin{frame}{Preventing data leakage}
+  \begin{block}{What is leakage?}
+    Using information that would not be available when making a prediction
+    can make results look better than they are.
+  \end{block}
+  \begin{itemize}
+    \item Keep counties separate across training, validation and test.
+    \item Hide target values from model inputs; score only those hidden cells.
+    \item Tree models exclude source totals and county identifiers as predictors.
+    \item Tune on training folds; reserve test counties for final evaluation.
+  \end{itemize}
+  \small The autoencoder uses reported totals as \emph{training supervision},
+  not validation or test prediction inputs.
+\end{frame}
+
 \begin{frame}{Why these techniques?}
   \begin{block}{Reconstruction}
     Tree models can capture nonlinear relationships between age groups. The masked
@@ -94,6 +126,25 @@
   \end{block}
   \small The autoencoder uses reported totals as extra training supervision; tree models do not.
   Comparisons therefore reflect different training information.
+\end{frame}
+
+\begin{frame}{How the model was tuned}
+  \small
+  \begin{enumerate}
+    \item For each missingness pattern and rate, hide known training values and
+    try a small grid of model settings.
+    \item Use \textbf{three-fold county-grouped cross-validation}: train on
+    counties in two folds, score hidden values in the remaining fold, and
+    rotate. Choose settings with the lowest average MAE.
+    \item For Random Forest, use 100 trees and try leaf sizes 1 or 3 and
+    feature fractions 0.7 or 1.0; settings are chosen separately per scenario.
+    \item Fit with the chosen settings on the training data; compare the three
+    families on the separate seven-county validation split.
+  \end{enumerate}
+  \begin{block}{Example: scattered 10\%}
+    The selected forest used 100 trees, leaf size 1 and all features.
+    These are the selected settings for this scenario, not necessarily every scenario.
+  \end{block}
 \end{frame}
 
 \begin{frame}{Validation: model selection}
@@ -116,6 +167,24 @@
     \item A small average difference does not establish a reliable winner.
   \end{itemize}
   \tiny Source: \texttt{models/selected/selection.json}; rounded to whole people.
+\end{frame}
+
+\begin{frame}{How confident are the estimates?}
+  \small
+  \begin{itemize}
+    \item \textbf{Evidence:} evaluation uses hidden known values, grouped tuning
+    and matching masks; a median reference provides a separate check.
+    \item \textbf{Limits:} seven validation counties, simulated gaps, a small
+    model-family margin and an untouched test set make generalisation uncertain.
+    The median reference wins in three of nine scenarios.
+    \item \textbf{Calibration:} tuning settings is not uncertainty calibration.
+    The current system returns point estimates, not calibrated prediction intervals.
+  \end{itemize}
+  \begin{block}{Proposed next step}
+    Reserve separate calibration data, construct prediction intervals and check
+    their coverage on independent test data; report assumptions and subgroup
+    results. Small samples and changing populations may limit reliability.
+  \end{block}
 \end{frame}
 
 \begin{frame}{Results vary by missing-data scenario}
@@ -220,6 +289,35 @@
     \item Docker Compose also starts Prometheus and Grafana for local monitoring.
     \item The Streamlit application and API are deployed on Render.
   \end{itemize}
+\end{frame}
+
+\begin{frame}{Drift: what can change?}
+  \begin{itemize}
+    \item \textbf{Inputs and missingness:} profiles or patterns of gaps change.
+    \item \textbf{Targets:} true population values change over time.
+    \item \textbf{Concept:} the relationship between inputs and targets changes.
+    \item \textbf{Outputs and performance:} estimates change or errors increase.
+  \end{itemize}
+  \begin{block}{Available now}
+    Compare two uploaded datasets on request; input changes alone do not prove
+    a change in prediction accuracy.
+  \end{block}
+\end{frame}
+
+\begin{frame}{How we will monitor the model}
+  \begin{block}{Available now}
+    Service health, requests, errors and latency; on-demand dataset comparison.
+  \end{block}
+  \begin{block}{Planned}
+    \begin{itemize}
+      \item Check data quality, missingness and input/output drift regularly.
+      \item When verified values arrive, track MAE and bias by group and scenario.
+      \item Investigate alerts; validate a replacement before deployment and
+      keep the old model for rollback.
+    \end{itemize}
+  \end{block}
+  \small Automated model monitoring, alert thresholds and retraining are not
+  yet implemented. Service health does not prove prediction accuracy.
 \end{frame}
 
 \begin{frame}{Limitations and responsible interpretation}
